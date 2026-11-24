@@ -14,15 +14,20 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ------------------------------------------------------------
 // Stage Progression Configuration (Solo: 10 Questions per Stage)
+// Stage 1: 입문 (6/10) -> Stage 2: 초급 (6/10) -> Stage 3: 중급 (7/10)
+// Stage 4: 고급 1 (7/10) -> Stage 5: 고급 2 (8/10) -> Stage 6: 고급 3 (9/10) -> Stage 7+: 고급 4+ (10/10)
 // ------------------------------------------------------------
 function getStageConfig(stageNum) {
   if (stageNum === 1) {
-    return { stage: 1, difficulty: 'beginner', label: '초급', count: 10, passCutline: 6, basePoints: 100, timeSec: 35 };
+    return { stage: 1, difficulty: 'intro', label: '입문', count: 10, passCutline: 6, basePoints: 80, timeSec: 35 };
   }
   if (stageNum === 2) {
-    return { stage: 2, difficulty: 'intermediate', label: '중급', count: 10, passCutline: 7, basePoints: 150, timeSec: 35 };
+    return { stage: 2, difficulty: 'beginner', label: '초급', count: 10, passCutline: 6, basePoints: 100, timeSec: 35 };
   }
-  const advTier = stageNum - 2;
+  if (stageNum === 3) {
+    return { stage: 3, difficulty: 'intermediate', label: '중급', count: 10, passCutline: 7, basePoints: 150, timeSec: 35 };
+  }
+  const advTier = stageNum - 3;
   const cutline = Math.min(6 + advTier, 10);
   const basePoints = 200 + (advTier - 1) * 30;
   return {
@@ -90,7 +95,7 @@ function sanitizeSoloQuestion(q, indexInStage, stageCfg) {
 }
 
 function sanitizeDuelQuestion(q, roundIndex, baseRounds, isOvertime, overtimeRound) {
-  const diffLabels = { beginner: '초급', intermediate: '중급', advanced: '고급' };
+  const diffLabels = { intro: '입문', beginner: '초급', intermediate: '중급', advanced: '고급' };
   return {
     id: q.id,
     roundIndex,
@@ -398,15 +403,17 @@ app.post('/api/duel/start', (req, res) => {
   const duelId = crypto.randomBytes(10).toString('hex');
   const usedIds = new Set(Array.isArray(seenIds) ? seenIds.slice(-1200) : []);
 
-  // 10 base questions: 4 beginner + 3 intermediate + 3 advanced
-  const bQs = selectQuestions({ difficulty: 'beginner', category: 'all', count: 4, seenIds: Array.from(usedIds) });
+  // 10 base questions: 2 intro + 3 beginner + 3 intermediate + 2 advanced
+  const nQs = selectQuestions({ difficulty: 'intro', category: 'all', count: 2, seenIds: Array.from(usedIds) });
+  nQs.forEach((q) => usedIds.add(q.id));
+  const bQs = selectQuestions({ difficulty: 'beginner', category: 'all', count: 3, seenIds: Array.from(usedIds) });
   bQs.forEach((q) => usedIds.add(q.id));
   const iQs = selectQuestions({ difficulty: 'intermediate', category: 'all', count: 3, seenIds: Array.from(usedIds) });
   iQs.forEach((q) => usedIds.add(q.id));
-  const aQs = selectQuestions({ difficulty: 'advanced', category: 'all', count: 3, seenIds: Array.from(usedIds) });
+  const aQs = selectQuestions({ difficulty: 'advanced', category: 'all', count: 2, seenIds: Array.from(usedIds) });
   aQs.forEach((q) => usedIds.add(q.id));
 
-  const questions = [...bQs, ...iQs, ...aQs];
+  const questions = [...nQs, ...bQs, ...iQs, ...aQs];
 
   const duel = {
     duelId,

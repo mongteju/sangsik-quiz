@@ -12,9 +12,11 @@ const { server, startServer, getStageConfig } = require('../server');
 async function runTests() {
   console.log('=== 1. Question Bank Integrity ===');
   const stats = getStats();
-  assert(stats.totalQuestions >= 1300, `Expected >= 1300 questions, got ${stats.totalQuestions}`);
+  assert(stats.totalQuestions >= 1490, `Expected >= 1490 questions, got ${stats.totalQuestions}`);
+  assert(stats.byDifficulty.intro >= 195, `Expected >= 195 intro questions, got ${stats.byDifficulty.intro}`);
+  assert(stats.byDifficulty.beginner >= 245, `Expected >= 245 beginner questions, got ${stats.byDifficulty.beginner}`);
   assert.strictEqual(CATEGORIES.length, 10);
-  console.log(`Loaded ${stats.totalQuestions} unique questions (beginner=${stats.byDifficulty.beginner}, intermediate=${stats.byDifficulty.intermediate}, advanced=${stats.byDifficulty.advanced}).`);
+  console.log(`Loaded ${stats.totalQuestions} unique questions (intro=${stats.byDifficulty.intro}, beginner=${stats.byDifficulty.beginner}, intermediate=${stats.byDifficulty.intermediate}, advanced=${stats.byDifficulty.advanced}).`);
 
   console.log('\n=== 2. UI Cleanliness Verification ===');
   for (const rel of ['public/index.html', 'public/styles.css', 'public/app.js']) {
@@ -26,8 +28,8 @@ async function runTests() {
 
   console.log('\n=== 3. Stage Cutline Progression ===');
   assert.deepStrictEqual(
-    [1, 2, 3, 4, 5, 6].map((n) => `${getStageConfig(n).label}:${getStageConfig(n).passCutline}`),
-    ['초급:6', '중급:7', '고급 1:7', '고급 2:8', '고급 3:9', '고급 4:10']
+    [1, 2, 3, 4, 5, 6, 7].map((n) => `${getStageConfig(n).label}:${getStageConfig(n).passCutline}`),
+    ['입문:6', '초급:6', '중급:7', '고급 1:7', '고급 2:8', '고급 3:9', '고급 4:10']
   );
 
   console.log('\n=== 4. Live Server: Ranking High-Score Overwrite & Local 2P Sudden-Death Overtime ===');

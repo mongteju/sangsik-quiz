@@ -1,3 +1,4 @@
+const introEasyRaw = require('./intro_easy');
 const beginnerEasyRaw = require('./beginner_easy');
 const historyRaw = require('./history');
 const scienceRaw = require('./science');
@@ -26,6 +27,7 @@ const CATEGORIES = [
 const CATEGORY_MAP = new Map(CATEGORIES.map((c) => [c.id, c]));
 
 const DIFFICULTY_META = {
+  intro: { id: 'intro', name: '입문', en: 'INTRO', basePoints: 80, timeSec: 35 },
   beginner: { id: 'beginner', name: '초급', en: 'STANDARD', basePoints: 100, timeSec: 35 },
   intermediate: { id: 'intermediate', name: '중급', en: 'NATIONAL', basePoints: 150, timeSec: 35 },
   advanced: { id: 'advanced', name: '고급', en: 'CHIEF EDITOR', basePoints: 200, timeSec: 40 }
@@ -73,7 +75,24 @@ function addQuestion({ id, cat, difficulty, question, answer, distractors, hint,
   QUESTION_BY_ID.set(id, qObj);
 }
 
-// 1. Load truly accessible everyday beginner pool (250 questions, 25 per category)
+// 1. Load ultra-accessible introductory pool (200 questions, 20 per category)
+introEasyRaw.forEach((row, idx) => {
+  const [catId, question, answer, distractors, hint, explanation] = row;
+  const cat = CATEGORY_MAP.get(catId);
+  if (!cat) return;
+  addQuestion({
+    id: `intro-${catId}-${String(idx + 1).padStart(3, '0')}`,
+    cat,
+    difficulty: 'intro',
+    question,
+    answer,
+    distractors,
+    hint,
+    explanation
+  });
+});
+
+// 2. Load accessible everyday beginner pool (250 questions, 25 per category)
 beginnerEasyRaw.forEach((row, idx) => {
   const [catId, question, answer, distractors, hint, explanation] = row;
   const cat = CATEGORY_MAP.get(catId);
@@ -188,9 +207,9 @@ function selectQuestions({ difficulty = 'progressive', category = 'all', count =
 
 function getStats() {
   const byCategory = {};
-  const byDifficulty = { beginner: 0, intermediate: 0, advanced: 0 };
+  const byDifficulty = { intro: 0, beginner: 0, intermediate: 0, advanced: 0 };
   for (const cat of CATEGORIES) {
-    byCategory[cat.id] = { name: cat.name, en: cat.en, total: 0, beginner: 0, intermediate: 0, advanced: 0 };
+    byCategory[cat.id] = { name: cat.name, en: cat.en, total: 0, intro: 0, beginner: 0, intermediate: 0, advanced: 0 };
   }
   for (const q of ALL_QUESTIONS) {
     byCategory[q.category].total += 1;
