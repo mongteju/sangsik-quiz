@@ -15,7 +15,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ------------------------------------------------------------
 // Stage Progression Configuration (Solo: 10 Questions per Stage)
 // Stage 1: 입문 (6/10) -> Stage 2: 초급 (6/10) -> Stage 3: 중급 (7/10)
-// Stage 4: 고급 1 (7/10) -> Stage 5: 고급 2 (8/10) -> Stage 6: 고급 3 (9/10) -> Stage 7+: 고급 4+ (10/10)
+// Stage 4+: 고급 1, 고급 2, 고급 3... (일괄 7/10 통과)
 // ------------------------------------------------------------
 function getStageConfig(stageNum) {
   if (stageNum === 1) {
@@ -28,14 +28,13 @@ function getStageConfig(stageNum) {
     return { stage: 3, difficulty: 'intermediate', label: '중급', count: 10, passCutline: 7, basePoints: 150, timeSec: 35 };
   }
   const advTier = stageNum - 3;
-  const cutline = Math.min(6 + advTier, 10);
   const basePoints = 200 + (advTier - 1) * 30;
   return {
     stage: stageNum,
     difficulty: 'advanced',
     label: `고급 ${advTier}`,
     count: 10,
-    passCutline: cutline,
+    passCutline: 7,
     basePoints,
     timeSec: 40
   };

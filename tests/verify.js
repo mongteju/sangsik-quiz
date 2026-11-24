@@ -29,7 +29,7 @@ async function runTests() {
   console.log('\n=== 3. Stage Cutline Progression ===');
   assert.deepStrictEqual(
     [1, 2, 3, 4, 5, 6, 7].map((n) => `${getStageConfig(n).label}:${getStageConfig(n).passCutline}`),
-    ['입문:6', '초급:6', '중급:7', '고급 1:7', '고급 2:8', '고급 3:9', '고급 4:10']
+    ['입문:6', '초급:6', '중급:7', '고급 1:7', '고급 2:7', '고급 3:7', '고급 4:7']
   );
 
   console.log('\n=== 4. Live Server: Ranking High-Score Overwrite & Local 2P Sudden-Death Overtime ===');
