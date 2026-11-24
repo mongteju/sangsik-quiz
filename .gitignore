@@ -1,0 +1,7 @@
+node_modules/
+.env
+data/quiz.db
+data/quiz.db-wal
+data/quiz.db-shm
+data/rankings.json.tmp
+*.log

@@ -1,0 +1,826 @@
+/* ==========================================================================
+   Editorial Minimalism — Pure Typography & Quiet Space
+   ========================================================================== */
+
+:root {
+  --bg: #FAF8F4;
+  --ink: #141413;
+  --ink-2: #57544E;
+  --ink-3: #8F8B83;
+  --line: rgba(20, 20, 19, 0.12);
+  --line-strong: rgba(20, 20, 19, 0.72);
+  --hover: rgba(20, 20, 19, 0.045);
+  --accent: #B4232A;
+  --ok: #1B6A40;
+  --ok-bg: rgba(27, 106, 64, 0.08);
+  --no: #B4232A;
+  --no-bg: rgba(180, 35, 42, 0.07);
+
+  --serif: 'Playfair Display', 'Noto Serif KR', Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Noto Sans KR', sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button, input {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.canvas {
+  max-width: 860px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  display: flex;
+  flex-direction: column;
+}
+
+.view {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  animation: appear 0.25s var(--ease);
+}
+
+.view.active {
+  display: flex;
+}
+
+@keyframes appear {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   Navigation & Centered Stacks
+   ========================================================================== */
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 40px;
+  margin-bottom: 24px;
+}
+
+.nav-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.back-btn {
+  border: none;
+  background: transparent;
+  padding: 8px 10px 8px 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color 0.18s var(--ease), transform 0.18s var(--ease);
+}
+
+.back-btn:hover {
+  color: var(--ink);
+  transform: translateX(-2px);
+}
+
+.center-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+  padding-bottom: 32px;
+}
+
+/* ==========================================================================
+   Typography & Minimal Buttons
+   ========================================================================== */
+.wordmark {
+  margin: 0 0 56px;
+  font-family: var(--serif);
+  font-size: clamp(2.8rem, 7.5vw, 4.1rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.screen-title {
+  margin: 0 0 40px;
+  font-family: var(--serif);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.home-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 28px;
+}
+
+.home-credit {
+  text-align: center;
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+  padding-top: 12px;
+}
+
+.btn-solid,
+.btn-subtle,
+.btn-text {
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.18s var(--ease), background 0.18s var(--ease), transform 0.15s var(--ease);
+}
+
+.btn-solid:active,
+.btn-subtle:active {
+  transform: scale(0.985);
+}
+
+.btn-solid {
+  width: 100%;
+  min-height: 54px;
+  padding: 14px 28px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.btn-solid:hover {
+  opacity: 0.88;
+}
+
+.btn-solid:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn-compact {
+  width: auto;
+  min-height: 44px;
+  padding: 10px 24px;
+  font-size: 0.94rem;
+}
+
+.btn-subtle {
+  width: 100%;
+  min-height: 54px;
+  padding: 14px 28px;
+  border-radius: 999px;
+  background: rgba(20, 20, 19, 0.06);
+  color: var(--ink);
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.btn-subtle:hover {
+  background: rgba(20, 20, 19, 0.11);
+}
+
+.btn-text {
+  background: transparent;
+  color: var(--ink-2);
+  padding: 10px 16px;
+  font-size: 0.96rem;
+  font-weight: 500;
+}
+
+.btn-text:hover {
+  color: var(--ink);
+}
+
+.line-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1.5px solid var(--line);
+  background: transparent;
+  padding: 14px 4px;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 500;
+  margin-bottom: 32px;
+  border-radius: 0;
+  transition: border-color 0.2s var(--ease);
+}
+
+.line-input::placeholder {
+  color: var(--ink-3);
+}
+
+.line-input:focus {
+  outline: none;
+  border-bottom-color: var(--ink);
+}
+
+.duel-name-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  width: 100%;
+}
+
+/* ==========================================================================
+   Ranking View (Borderless Typographic Table with Date & Time)
+   ========================================================================== */
+.ranking-wrap {
+  width: 100%;
+}
+
+.ranking-head,
+.ranking-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1.4fr) 74px 86px 136px;
+  align-items: center;
+  gap: 12px;
+}
+
+.ranking-head {
+  padding: 0 0 12px;
+  border-bottom: 1.5px solid var(--line-strong);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+
+.ranking-row {
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.96rem;
+}
+
+.ranking-rank {
+  font-family: var(--mono);
+  font-size: 0.88rem;
+  color: var(--ink-3);
+}
+
+.ranking-row.is-top .ranking-rank {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ranking-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ranking-stage {
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+
+.ranking-score,
+.ranking-date {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ranking-score {
+  font-weight: 600;
+}
+
+.ranking-date {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.align-right {
+  text-align: right;
+}
+
+.empty-state {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 0.96rem;
+}
+
+/* ==========================================================================
+   Solo Quiz & Local 2P Duel (Direct on Paper — Zero Card Boxes)
+   ========================================================================== */
+.quiz-wrap {
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.duel-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.quiz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.quiz-header-left,
+.quiz-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.stage-label {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.stage-label.overtime {
+  color: var(--accent);
+}
+
+.mono-meta {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.cutline-tag {
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.mono-score {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mono-timer {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  color: var(--ink-2);
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.mono-timer.urgent {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Duel Score Row */
+.duel-score-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 0 14px;
+  border-top: 1px solid var(--line);
+}
+
+.duel-side {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.duel-name {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.duel-pts {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.duel-vs {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--ink-3);
+}
+
+/* 10-Pip Stage Progress Track */
+.stage-pips {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.pip {
+  height: 3px;
+  background: var(--line);
+  position: relative;
+  transition: background-color 0.25s var(--ease);
+}
+
+.pip.ok {
+  background: var(--ink);
+}
+
+.pip.no {
+  background: rgba(180, 35, 42, 0.35);
+}
+
+.pip.current {
+  background: rgba(20, 20, 19, 0.42);
+}
+
+.pip.cutline::after {
+  content: '';
+  position: absolute;
+  right: -3.5px;
+  top: -3px;
+  width: 1px;
+  height: 9px;
+  background: var(--ink-3);
+}
+
+/* Thin Timer Hairline */
+.timer-track {
+  width: 100%;
+  height: 2px;
+  background: var(--line);
+  margin-bottom: 36px;
+  overflow: hidden;
+}
+
+.timer-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--ink);
+  transition: width 0.2s linear, background-color 0.3s;
+}
+
+.timer-fill.urgent {
+  background: var(--accent);
+}
+
+/* Question Typography */
+.question-area {
+  margin-bottom: 34px;
+}
+
+.duel-question-area {
+  margin-bottom: 36px;
+}
+
+.question-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.category-tag {
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.hint-actions {
+  display: flex;
+  gap: 14px;
+}
+
+.hint-link {
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.hint-link:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.hint-link:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.question-text {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.48;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+}
+
+.hint-reveal {
+  margin: 18px 0 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--ink-3);
+  font-size: 0.96rem;
+  color: var(--ink-2);
+}
+
+/* Choices List */
+.choices-list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.choice-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 58px;
+  padding: 14px 12px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s var(--ease), opacity 0.2s;
+  word-break: keep-all;
+}
+
+.choice-item:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.choice-item:disabled {
+  cursor: default;
+}
+
+.choice-idx {
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  color: var(--ink-3);
+  min-width: 18px;
+}
+
+.choice-label {
+  font-size: 1.04rem;
+  font-weight: 500;
+  line-height: 1.38;
+}
+
+.choice-item.eliminated {
+  opacity: 0.22;
+  text-decoration: line-through;
+  pointer-events: none;
+}
+
+.choice-item.selected {
+  background: rgba(20, 20, 19, 0.06);
+}
+
+.choice-item.correct {
+  background: var(--ok-bg);
+}
+
+.choice-item.correct .choice-idx,
+.choice-item.correct .choice-label {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.choice-item.wrong {
+  background: var(--no-bg);
+}
+
+.choice-item.wrong .choice-idx,
+.choice-item.wrong .choice-label {
+  color: var(--no);
+}
+
+/* Local 2P Split Panels */
+.duel-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 36px;
+}
+
+.duel-col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.duel-col-head strong {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.duel-col-state {
+  font-size: 0.82rem;
+  color: var(--ok);
+  font-weight: 600;
+}
+
+/* Conceal chosen side until both players submit (anti-peeking on one screen) */
+.duel-col.locked-hidden .choices-list {
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+/* Post-Answer Reveal */
+.answer-reveal {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1.5px solid var(--line-strong);
+  animation: appear 0.22s var(--ease);
+}
+
+.reveal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.reveal-status {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.reveal-verdict {
+  font-family: var(--serif);
+  font-size: 1.18rem;
+  font-weight: 700;
+}
+
+.reveal-verdict.ok {
+  color: var(--ok);
+}
+
+.reveal-verdict.no {
+  color: var(--no);
+}
+
+.reveal-points {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+
+.duel-round-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-size: 0.96rem;
+  font-weight: 600;
+}
+
+.duel-round-summary .ok {
+  color: var(--ok);
+}
+
+.duel-round-summary .no {
+  color: var(--no);
+}
+
+.reveal-explanation {
+  margin: 0;
+  font-size: 0.96rem;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+/* ==========================================================================
+   Stage Clear & Result Views
+   ========================================================================== */
+.clear-kicker,
+.result-kicker {
+  font-family: var(--serif);
+  font-size: 1.38rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.clear-ratio,
+.result-giant-score {
+  font-family: var(--mono);
+  font-size: clamp(2.8rem, 8.5vw, 4.3rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin-bottom: 18px;
+}
+
+.next-stage-preview {
+  font-size: 1.02rem;
+  color: var(--ink-2);
+  margin-bottom: 40px;
+}
+
+.result-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 16px 0;
+  margin-bottom: 32px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  width: 100%;
+  font-size: 0.94rem;
+  color: var(--ink-2);
+}
+
+.result-meta-row strong {
+  color: var(--ink);
+  font-family: var(--mono);
+  margin-left: 6px;
+}
+
+.result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--bg);
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  z-index: 100;
+  animation: appear 0.2s var(--ease);
+}
+
+@media (max-width: 680px) {
+  .canvas {
+    padding: 20px 16px 36px;
+  }
+  .duel-panels {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .ranking-head,
+  .ranking-row {
+    grid-template-columns: 28px minmax(0, 1.2fr) 56px 68px 110px;
+    gap: 6px;
+    font-size: 0.84rem;
+  }
+  .ranking-date {
+    font-size: 0.72rem;
+  }
+}

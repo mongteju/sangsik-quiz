@@ -1,0 +1,18 @@
+{
+  "name": "herald-tribune-trivia",
+  "version": "1.0.0",
+  "description": "The Herald Tribune Knowledge Edition — Apple HIG homage real-time trivia web app with 1,000+ curated questions, fair no-reflex scoring, live ranking, and online 2P duel.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/verify.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.23.1",
+    "ws": "^8.18.0"
+  }
+}

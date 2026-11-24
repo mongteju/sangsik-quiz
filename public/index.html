@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>상식퀴즈</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@500;700;900&family=Playfair+Display:wght@600;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="canvas">
+
+    <!-- 1. LANDING: 상식퀴즈 / 1인 모드 / 2인 모드 / 랭킹 -->
+    <section id="view-home" class="view active" aria-label="시작">
+      <div class="center-stack home-stack">
+        <h1 class="wordmark">상식퀴즈</h1>
+        <div class="home-actions">
+          <button type="button" id="goSoloBtn" class="btn-solid">1인 모드</button>
+          <button type="button" id="goDuelBtn" class="btn-subtle">2인 모드</button>
+        </div>
+        <button type="button" id="goRankingBtn" class="btn-text">랭킹</button>
+      </div>
+      <footer class="home-credit">제작자 임진택</footer>
+    </section>
+
+    <!-- 2. SOLO ENTRY -->
+    <section id="view-solo-entry" class="view" aria-label="1인 모드">
+      <div class="top-nav">
+        <button type="button" class="back-btn" data-back="view-home" aria-label="뒤로">←</button>
+      </div>
+      <div class="center-stack entry-stack">
+        <h2 class="screen-title">1인 모드</h2>
+        <input id="soloNameInput" class="line-input" type="text" maxlength="16" placeholder="이름" autocomplete="nickname" />
+        <button type="button" id="startSoloBtn" class="btn-solid">시작</button>
+      </div>
+    </section>
+
+    <!-- 3. LOCAL 2P DUEL ENTRY -->
+    <section id="view-duel-entry" class="view" aria-label="2인 모드">
+      <div class="top-nav">
+        <button type="button" class="back-btn" data-back="view-home" aria-label="뒤로">←</button>
+      </div>
+      <div class="center-stack entry-stack">
+        <h2 class="screen-title">2인 모드</h2>
+        <div class="duel-name-inputs">
+          <input id="p1NameInput" class="line-input" type="text" maxlength="16" placeholder="P1" autocomplete="off" />
+          <input id="p2NameInput" class="line-input" type="text" maxlength="16" placeholder="P2" autocomplete="off" />
+        </div>
+        <button type="button" id="startDuelBtn" class="btn-solid">시작</button>
+      </div>
+    </section>
+
+    <!-- 4. RANKING (1인 모드 전용 · 최고 점수 덮어쓰기 · 년월일 시간) -->
+    <section id="view-ranking" class="view" aria-label="랭킹">
+      <div class="top-nav">
+        <button type="button" class="back-btn" data-back="view-home" aria-label="뒤로">←</button>
+        <h2 class="nav-title">랭킹</h2>
+      </div>
+      <div class="ranking-wrap">
+        <div class="ranking-head">
+          <span>#</span>
+          <span>이름</span>
+          <span>단계</span>
+          <span class="align-right">점수</span>
+          <span class="align-right">일시</span>
+        </div>
+        <div id="rankingList" class="ranking-rows"></div>
+      </div>
+    </section>
+
+    <!-- 5. SOLO QUIZ -->
+    <section id="view-quiz" class="view" aria-label="1인 퀴즈">
+      <div class="quiz-wrap">
+        <header class="quiz-header">
+          <div class="quiz-header-left">
+            <button type="button" id="quitSoloBtn" class="back-btn" aria-label="나가기">←</button>
+            <span id="stageLabel" class="stage-label">초급</span>
+            <span id="questionCounter" class="mono-meta">1 / 10</span>
+            <span id="cutlineTag" class="cutline-tag">통과 6</span>
+          </div>
+          <div class="quiz-header-right">
+            <span id="soloScoreDisplay" class="mono-score">0</span>
+            <span id="timerDisplay" class="mono-timer">35</span>
+          </div>
+        </header>
+
+        <div id="stagePips" class="stage-pips" aria-label="단계 진행"></div>
+
+        <div class="timer-track">
+          <div id="timerFill" class="timer-fill"></div>
+        </div>
+
+        <div class="question-area">
+          <div class="question-meta-row">
+            <span id="categoryTag" class="category-tag"></span>
+            <div class="hint-actions">
+              <button type="button" id="hint5050Btn" class="hint-link">50:50</button>
+              <button type="button" id="hintEditorialBtn" class="hint-link">힌트</button>
+            </div>
+          </div>
+          <h2 id="questionText" class="question-text"></h2>
+          <p id="hintText" class="hint-reveal hidden"></p>
+        </div>
+
+        <div id="choicesList" class="choices-list" role="radiogroup"></div>
+
+        <div id="answerReveal" class="answer-reveal hidden" aria-live="polite">
+          <div class="reveal-top">
+            <div class="reveal-status">
+              <strong id="revealVerdict" class="reveal-verdict"></strong>
+              <span id="revealPoints" class="reveal-points"></span>
+            </div>
+            <button type="button" id="nextQuestionBtn" class="btn-solid btn-compact">다음</button>
+          </div>
+          <p id="revealExplanation" class="reveal-explanation"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. LOCAL OFFLINE 2P DUEL (P1 / P2 Split Choices on One Screen) -->
+    <section id="view-duel" class="view" aria-label="2인 대전">
+      <div class="duel-wrap">
+        <header class="quiz-header">
+          <div class="quiz-header-left">
+            <button type="button" id="quitDuelBtn" class="back-btn" aria-label="나가기">←</button>
+            <span id="duelRoundLabel" class="stage-label">1 / 10</span>
+            <span id="duelCategoryTag" class="cutline-tag"></span>
+          </div>
+          <div class="quiz-header-right">
+            <span id="duelTimerDisplay" class="mono-timer">35</span>
+          </div>
+        </header>
+
+        <div class="duel-score-row">
+          <div class="duel-side">
+            <span id="duelP1Label" class="duel-name">P1</span>
+            <span id="duelP1Score" class="duel-pts">0</span>
+          </div>
+          <span class="duel-vs">vs</span>
+          <div class="duel-side duel-side-right">
+            <span id="duelP2Score" class="duel-pts">0</span>
+            <span id="duelP2Label" class="duel-name">P2</span>
+          </div>
+        </div>
+
+        <div class="timer-track">
+          <div id="duelTimerFill" class="timer-fill"></div>
+        </div>
+
+        <div class="duel-question-area">
+          <h2 id="duelQuestionText" class="question-text"></h2>
+        </div>
+
+        <!-- Side-by-side P1 & P2 Choices -->
+        <div class="duel-panels">
+          <div class="duel-col" id="duelP1Col">
+            <div class="duel-col-head">
+              <strong id="duelP1ColName">P1</strong>
+              <span id="duelP1State" class="duel-col-state"></span>
+            </div>
+            <div id="duelP1Choices" class="choices-list"></div>
+          </div>
+
+          <div class="duel-col" id="duelP2Col">
+            <div class="duel-col-head">
+              <strong id="duelP2ColName">P2</strong>
+              <span id="duelP2State" class="duel-col-state"></span>
+            </div>
+            <div id="duelP2Choices" class="choices-list"></div>
+          </div>
+        </div>
+
+        <div id="duelReveal" class="answer-reveal hidden" aria-live="polite">
+          <div class="reveal-top">
+            <div id="duelRevealSummary" class="duel-round-summary"></div>
+            <button type="button" id="nextDuelBtn" class="btn-solid btn-compact">다음</button>
+          </div>
+          <p id="duelRevealExplanation" class="reveal-explanation"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. STAGE CLEAR TRANSITION (Solo) -->
+    <section id="view-stage-clear" class="view" aria-label="단계 통과">
+      <div class="center-stack clear-stack">
+        <span id="clearedLabel" class="clear-kicker">초급 통과</span>
+        <div id="clearedRatio" class="clear-ratio">8 / 10</div>
+        <div id="nextStagePreview" class="next-stage-preview">중급 · 7개 이상 통과</div>
+        <button type="button" id="continueStageBtn" class="btn-solid">계속</button>
+      </div>
+    </section>
+
+    <!-- 8. FINAL RESULT -->
+    <section id="view-result" class="view" aria-label="결과">
+      <div class="center-stack result-stack">
+        <span id="resultTitle" class="result-kicker">종료</span>
+        <div id="resultScore" class="result-giant-score">0</div>
+        <div id="resultMetaRow" class="result-meta-row"></div>
+        <div class="result-actions">
+          <button type="button" id="retrySoloBtn" class="btn-solid hidden">다시 시작</button>
+          <button type="button" id="retryDuelBtn" class="btn-solid hidden">다시 대결</button>
+          <button type="button" id="resultRankingBtn" class="btn-subtle hidden">랭킹</button>
+          <button type="button" id="resultHomeBtn" class="btn-text">처음으로</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast hidden" role="alert"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
