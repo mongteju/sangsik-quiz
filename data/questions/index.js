@@ -1,5 +1,7 @@
 const introEasyRaw = require('./intro_easy');
+const introExtraRaw = require('./intro_extra');
 const beginnerEasyRaw = require('./beginner_easy');
+const { polishKoreanText, rebalanceDifficulty } = require('./rebalance');
 const historyRaw = require('./history');
 const scienceRaw = require('./science');
 const humanitiesRaw = require('./humanities');
@@ -75,18 +77,26 @@ const SEEN_PROMPTS = new Set();
 
 function addQuestion({ id, catId, difficulty, question, answer, distractors, hint, explanation }) {
   const cat = CATEGORY_MAP.get(catId);
-  const diff = DIFF_ALIAS[difficulty] || 'intermediate';
+  const rawDiff = DIFF_ALIAS[difficulty] || 'intermediate';
   if (!cat || !question || !answer) return;
 
-  const qClean = String(question).trim();
-  const aClean = String(answer).trim();
+  const qClean = polishKoreanText(question);
+  const aClean = polishKoreanText(answer);
   const norm = qClean.replace(/\s+/g, '');
   if (SEEN_PROMPTS.has(norm)) return;
 
   const cleanDistractors = Array.from(
-    new Set((distractors || []).map((d) => String(d || '').trim()).filter((d) => d && d !== aClean))
+    new Set((distractors || []).map((d) => polishKoreanText(d)).filter((d) => d && d !== aClean))
   );
   if (cleanDistractors.length < 4) return;
+
+  const diff = rebalanceDifficulty({
+    id,
+    category: cat.id,
+    difficulty: rawDiff,
+    question: qClean,
+    answer: aClean
+  });
 
   SEEN_PROMPTS.add(norm);
   const meta = DIFFICULTY_META[diff];
@@ -103,8 +113,8 @@ function addQuestion({ id, catId, difficulty, question, answer, distractors, hin
     question: qClean,
     answer: aClean,
     distractors: cleanDistractors,
-    hint: String(hint || '').trim(),
-    explanation: String(explanation || '').trim()
+    hint: polishKoreanText(hint),
+    explanation: polishKoreanText(explanation)
   };
   ALL_QUESTIONS.push(qObj);
   QUESTION_BY_ID.set(id, qObj);
@@ -116,6 +126,20 @@ introEasyRaw.forEach((row, idx) => {
   addQuestion({
     id: `cur-intro-${String(idx + 1).padStart(4, '0')}`,
     catId: mapLegacyCategory(oldCat, question),
+    difficulty: 'intro',
+    question,
+    answer,
+    distractors,
+    hint,
+    explanation
+  });
+});
+
+introExtraRaw.forEach((row, idx) => {
+  const [catId, question, answer, distractors, hint, explanation] = row;
+  addQuestion({
+    id: `intro-extra-${String(idx + 1).padStart(4, '0')}`,
+    catId,
     difficulty: 'intro',
     question,
     answer,

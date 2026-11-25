@@ -19,13 +19,18 @@ async function runTests() {
     const s = stats.byCategory[cat.id];
     console.log(`  - ${cat.id.padEnd(16)} (${cat.name}): total=${s.total} [intro=${s.intro}, beg=${s.beginner}, int=${s.intermediate}, adv=${s.advanced}]`);
     assert(s.total >= 2000, `Category ${cat.id} should have >= 2000 questions, got ${s.total}`);
-    assert(s.intro >= 250, `Category ${cat.id} intro too low: ${s.intro}`);
-    assert(s.beginner >= 400, `Category ${cat.id} beginner too low: ${s.beginner}`);
-    assert(s.intermediate >= 500, `Category ${cat.id} intermediate too low: ${s.intermediate}`);
-    assert(s.advanced >= 400, `Category ${cat.id} advanced too low: ${s.advanced}`);
+    assert(s.intro >= 50, `Category ${cat.id} intro too low: ${s.intro}`);
+    assert(s.beginner >= 250, `Category ${cat.id} beginner too low: ${s.beginner}`);
+    assert(s.intermediate >= 800, `Category ${cat.id} intermediate too low: ${s.intermediate}`);
+    assert(s.advanced >= 600, `Category ${cat.id} advanced too low: ${s.advanced}`);
   }
   assert(stats.totalQuestions >= 15000, `Expected >= 15000 unique questions, got ${stats.totalQuestions}`);
   assert.strictEqual(CATEGORIES.length, 6);
+
+  // Verify zero clunky Korean particles remain
+  for (const q of ALL_QUESTIONS) {
+    assert(!/[을은이과]\([를는가와]\)/.test(q.question), `Clunky Korean particle in ${q.id}: ${q.question}`);
+  }
 
   const seenIds = new Set();
   const seenPrompts = new Set();
