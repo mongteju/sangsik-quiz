@@ -5,46 +5,60 @@ const {
   ALL_QUESTIONS,
   CATEGORIES,
   QUESTION_BY_ID,
+  selectQuestions,
   getStats
 } = require('../data/questions');
+const { normalizeAnswerKey, getTemplateSignature } = require('../data/questions/rebalance');
 const db = require('../db');
 const { server, startServer, getStageConfig } = require('../server');
 
 async function runTests() {
-  console.log('=== 1. 15,000+ Question Bank Integrity ===');
+  console.log('=== 1. Strictly Deduplicated 10,000+ Question Bank Integrity ===');
   const stats = getStats();
-  console.log(`Total unique questions: ${stats.totalQuestions}`);
+  console.log(`Total strictly unique questions: ${stats.totalQuestions}`);
   console.log('By difficulty:', stats.byDifficulty);
   for (const cat of CATEGORIES) {
     const s = stats.byCategory[cat.id];
     console.log(`  - ${cat.id.padEnd(16)} (${cat.name}): total=${s.total} [intro=${s.intro}, beg=${s.beginner}, int=${s.intermediate}, adv=${s.advanced}]`);
-    assert(s.total >= 2000, `Category ${cat.id} should have >= 2000 questions, got ${s.total}`);
+    assert(s.total >= 1200, `Category ${cat.id} should have >= 1200 unique questions, got ${s.total}`);
     assert(s.intro >= 50, `Category ${cat.id} intro too low: ${s.intro}`);
-    assert(s.beginner >= 250, `Category ${cat.id} beginner too low: ${s.beginner}`);
-    assert(s.intermediate >= 800, `Category ${cat.id} intermediate too low: ${s.intermediate}`);
-    assert(s.advanced >= 600, `Category ${cat.id} advanced too low: ${s.advanced}`);
+    assert(s.beginner >= 200, `Category ${cat.id} beginner too low: ${s.beginner}`);
+    assert(s.intermediate >= 550, `Category ${cat.id} intermediate too low: ${s.intermediate}`);
+    assert(s.advanced >= 300, `Category ${cat.id} advanced too low: ${s.advanced}`);
   }
-  assert(stats.totalQuestions >= 15000, `Expected >= 15000 unique questions, got ${stats.totalQuestions}`);
+  assert(stats.totalQuestions >= 10000, `Expected >= 10000 strictly unique questions, got ${stats.totalQuestions}`);
   assert.strictEqual(CATEGORIES.length, 6);
-
-  // Verify zero clunky Korean particles remain
-  for (const q of ALL_QUESTIONS) {
-    assert(!/[을은이과]\([를는가와]\)/.test(q.question), `Clunky Korean particle in ${q.id}: ${q.question}`);
-  }
 
   const seenIds = new Set();
   const seenPrompts = new Set();
+  const seenAns = new Set();
   for (const q of ALL_QUESTIONS) {
+    assert(!/[을은이과]\([를는가와]\)/.test(q.question), `Clunky Korean particle in ${q.id}: ${q.question}`);
     assert(q.id && !seenIds.has(q.id), `Duplicate ID: ${q.id}`);
     seenIds.add(q.id);
     const norm = q.question.replace(/\s+/g, '');
     assert(!seenPrompts.has(norm), `Duplicate prompt: ${q.question}`);
     seenPrompts.add(norm);
+    const ansKey = normalizeAnswerKey(q.category, q.answer);
+    assert(!seenAns.has(ansKey), `Duplicate answer in same category: ${ansKey}`);
+    seenAns.add(ansKey);
     assert(q.distractors.length >= 4, `Too few distractors on ${q.id}`);
     assert(!q.distractors.includes(q.answer), `Answer in distractors on ${q.id}`);
     assert(q.hint && q.explanation, `Missing hint/explanation on ${q.id}`);
   }
-  console.log('All 15,000+ questions passed strict uniqueness & schema checks!');
+
+  // Verify template diversity on 10-question stages
+  for (const testCase of [
+    { category: 'all', difficulty: 'intro' },
+    { category: 'all', difficulty: 'intermediate' },
+    { category: 'movie', difficulty: 'intermediate' },
+    { category: 'philosophy_lang', difficulty: 'intermediate' }
+  ]) {
+    const draw = selectQuestions({ ...testCase, count: 10, seenIds: [] });
+    const tpls = new Set(draw.map((q) => getTemplateSignature(q.question)));
+    assert(tpls.size >= 7, `Low template diversity for ${testCase.category}/${testCase.difficulty}: only ${tpls.size} unique templates in 10 questions`);
+  }
+  console.log('All 10,000+ questions passed strict semantic uniqueness & template diversity checks!');
 
   console.log('\n=== 2. UI Cleanliness Verification ===');
   for (const rel of ['public/index.html', 'public/styles.css', 'public/app.js']) {

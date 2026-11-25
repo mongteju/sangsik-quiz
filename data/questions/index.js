@@ -1,7 +1,14 @@
 const introEasyRaw = require('./intro_easy');
 const introExtraRaw = require('./intro_extra');
 const beginnerEasyRaw = require('./beginner_easy');
-const { polishKoreanText, rebalanceDifficulty } = require('./rebalance');
+const {
+  polishKoreanText,
+  rebalanceDifficulty,
+  isBoringClone,
+  normalizeAnswerKey,
+  extractSubjectKey,
+  getTemplateSignature
+} = require('./rebalance');
 const historyRaw = require('./history');
 const scienceRaw = require('./science');
 const humanitiesRaw = require('./humanities');
@@ -74,6 +81,8 @@ const DIFF_ALIAS = {
 const ALL_QUESTIONS = [];
 const QUESTION_BY_ID = new Map();
 const SEEN_PROMPTS = new Set();
+const SEEN_ANSWERS = new Set();
+const SEEN_SUBJECTS = new Set();
 
 function addQuestion({ id, catId, difficulty, question, answer, distractors, hint, explanation }) {
   const cat = CATEGORY_MAP.get(catId);
@@ -82,8 +91,17 @@ function addQuestion({ id, catId, difficulty, question, answer, distractors, hin
 
   const qClean = polishKoreanText(question);
   const aClean = polishKoreanText(answer);
-  const norm = qClean.replace(/\s+/g, '');
-  if (SEEN_PROMPTS.has(norm)) return;
+  if (isBoringClone(id, qClean, aClean)) return;
+
+  const normPrompt = qClean.replace(/\s+/g, '');
+  if (SEEN_PROMPTS.has(normPrompt)) return;
+
+  // Strict semantic deduplication: 1 unique answer & 1 unique quoted subject per category
+  const ansKey = normalizeAnswerKey(cat.id, aClean);
+  if (SEEN_ANSWERS.has(ansKey)) return;
+
+  const subjKey = extractSubjectKey(cat.id, qClean);
+  if (subjKey && SEEN_SUBJECTS.has(subjKey)) return;
 
   const cleanDistractors = Array.from(
     new Set((distractors || []).map((d) => polishKoreanText(d)).filter((d) => d && d !== aClean))
@@ -98,7 +116,10 @@ function addQuestion({ id, catId, difficulty, question, answer, distractors, hin
     answer: aClean
   });
 
-  SEEN_PROMPTS.add(norm);
+  SEEN_PROMPTS.add(normPrompt);
+  SEEN_ANSWERS.add(ansKey);
+  if (subjKey) SEEN_SUBJECTS.add(subjKey);
+
   const meta = DIFFICULTY_META[diff];
   const qObj = {
     id,
@@ -110,6 +131,7 @@ function addQuestion({ id, catId, difficulty, question, answer, distractors, hin
     difficultyEn: meta.en,
     basePoints: meta.basePoints,
     timeSec: meta.timeSec,
+    templateSig: getTemplateSignature(qClean),
     question: qClean,
     answer: aClean,
     distractors: cleanDistractors,
@@ -279,35 +301,45 @@ function selectQuestions({ difficulty = 'intro', category = 'all', count = 10, s
     else unseen.push(q);
   }
 
-  const pickBalanced = (list, needed, usedIds, lastCatRef) => {
+  const pickDiverse = (list, needed, usedIds, usedTpls, catCounts, lastCatRef) => {
     const shuffled = shuffleArray(list);
     const out = [];
-    if (safeCat === 'all' && shuffled.length > needed) {
-      for (let i = 0; i < shuffled.length && out.length < needed; i++) {
-        const cand = shuffled.find((q) => !usedIds.has(q.id) && q.category !== lastCatRef.cat)
-          || shuffled.find((q) => !usedIds.has(q.id));
-        if (!cand) break;
-        out.push(cand);
-        usedIds.add(cand.id);
-        lastCatRef.cat = cand.category;
+
+    // Multi-pass greedy diversity picker:
+    // Pass 1: fresh template (0 used) + different category from previous + balanced category count
+    // Pass 2: max 1 of same template + different category
+    // Pass 3: any remaining unused item
+    const passes = [
+      (q) => !usedIds.has(q.id) && (usedTpls.get(q.templateSig) || 0) === 0 && (safeCat !== 'all' || q.category !== lastCatRef.cat) && (safeCat !== 'all' || (catCounts.get(q.category) || 0) < Math.ceil(count / CATEGORIES.length)),
+      (q) => !usedIds.has(q.id) && (usedTpls.get(q.templateSig) || 0) === 0 && (safeCat !== 'all' || q.category !== lastCatRef.cat),
+      (q) => !usedIds.has(q.id) && (usedTpls.get(q.templateSig) || 0) <= 1 && (safeCat !== 'all' || q.category !== lastCatRef.cat),
+      (q) => !usedIds.has(q.id) && (usedTpls.get(q.templateSig) || 0) <= 1,
+      (q) => !usedIds.has(q.id)
+    ];
+
+    while (out.length < needed) {
+      let pickedOne = null;
+      for (const pred of passes) {
+        pickedOne = shuffled.find(pred);
+        if (pickedOne) break;
       }
-      return out;
-    }
-    for (const q of shuffled) {
-      if (out.length >= needed) break;
-      if (!usedIds.has(q.id)) {
-        out.push(q);
-        usedIds.add(q.id);
-      }
+      if (!pickedOne) break;
+      out.push(pickedOne);
+      usedIds.add(pickedOne.id);
+      usedTpls.set(pickedOne.templateSig, (usedTpls.get(pickedOne.templateSig) || 0) + 1);
+      catCounts.set(pickedOne.category, (catCounts.get(pickedOne.category) || 0) + 1);
+      lastCatRef.cat = pickedOne.category;
     }
     return out;
   };
 
   const usedIds = new Set();
+  const usedTpls = new Map();
+  const catCounts = new Map();
   const lastCatRef = { cat: null };
-  const picked = pickBalanced(unseen, count, usedIds, lastCatRef);
+  const picked = pickDiverse(unseen, count, usedIds, usedTpls, catCounts, lastCatRef);
   if (picked.length < count) {
-    picked.push(...pickBalanced(seen, count - picked.length, usedIds, lastCatRef));
+    picked.push(...pickDiverse(seen, count - picked.length, usedIds, usedTpls, catCounts, lastCatRef));
   }
   return picked.map(materializeQuestion);
 }

@@ -51,6 +51,7 @@ function polishKoreanText(text) {
   });
 
   // Fix minor generator typos found during audit
+  s = s.replace(/영화\s+한국\s+영화/g, '한국 영화');
   s = s.replace(/영화\s+영화/g, '영화');
   s = s.replace(/피겨 여왕로/g, '피겨 여왕으로');
   s = s.replace(/\s{2,}/g, ' ').trim();
@@ -62,7 +63,7 @@ function polishKoreanText(text) {
 // ---------------------------------------------------------------------------
 const ALWAYS_HARD_RE = /원자번호|ISO\s*4217|통화\s*코드|포트\s*번호|상태\s*코드|상태코드|HTTP|TCP|UDP|DNS|VPN|EUV|FinFET|GAA|HBM|DRAM|NAND|양자역학|불확정성|불완전성|상대성\s*이론|슈뢰딩거|하이젠베르크|미토콘드리아|소포체|리보솜|골지체|추간판|어문\s*규범|표준\s*용언|음운\s*변동|형태소|어족|방법적\s*회의|정언\s*명령|정언명령|변증법|현상학|실존주의|구조주의|공리주의|인식론|존재론|형이상학|원천징수|결정세액|파생상품|공매도|지니계수|베블런|스노브|밴드왜건|필리버스터|일사부재리|죄형법정|소멸시효|공소시효|몬트리올|람사르|바젤\s*협약|교토\s*의정서|성부|판소리\s*5마당|토리|바로크|로코코|인상주의|입체주의|초현실주의|야수파|표현주의|네오리얼리즘|누벨바그|미장센|몽타주|맥거핀|시네마토그래피|라그랑주|토카막|CCUS|알고리즘|복잡도|빅오|트랜스포머|강화학습|역전파|과적합/;
 
-const NEVER_INTRO_RE = /연도|몇\s*년|년대|세기|원소|주기율표|화합물|화학식|법칙|정리|SI\s*단위|단위\s*기호|물리량|중력\s*가속도|생물학적으로|몇\s*번째\s*행성|호르몬|효소|질환|증후군|신화\s*체계|문학\s*사조|저서|명제|철학자|사상가|학파|사자성어|고사성어|순우리말|맞춤법|외래어\s*표기|한자\s*음훈|훈민정음|조약|협약|의정서|헌법|형사|민법|행정법|공직선거법|거시경제|미시경제|경제·무역|경제·금융|금융·증권|국제기구|약어|통화\s*단위|화폐\s*단위|수도.*어디|수도로\s*두고|도청\s*소재지|발원지|해협|운하|해구|고봉|국립공원|수중릉|군주|시대와\s*관련|대성당|재위|군포|대표적인\s*업적|베른|캔버라|오타와|제\d+회|작곡한\s*음악가|그린\s*화가|조각\s*대표작|건축\s*양식|식문화|향신료|파이토케미컬|절기|올림픽이\s*개최된|롱코스|에\s*대한\s*설명으로\s*가장\s*알맞은|감독|연기한\s*배우|개봉한|제작\s*국가|출신국|수상작|영화제|대표\s*캐릭터\s*이름/;
+const NEVER_INTRO_RE = /연도|몇\s*년|년대|세기|원소|주기율표|화합물|화학식|법칙|정리|SI\s*단위|단위\s*기호|물리량|중력\s*가속도|생물학적으로|몇\s*번째\s*행성|호르몬|효소|질환|증후군|신화\s*체계|문학\s*사조|저서|명제|철학자|사상가|학파|사자성어|고사성어|순우리말|맞춤법|외래어\s*표기|한자\s*음훈|훈민정음|조약|협약|의정서|헌법|형사|민법|행정법|공직선거법|거시경제|미시경제|경제·무역|경제·금융|금융·증권|국제기구|약어|통화\s*단위|화폐\s*단위|수도.*어디|수도로\s*두고|도청\s*소재지|발원지|해협|운하|해구|고봉|국립공원|수중릉|군주|국왕|절대왕정|시대와\s*관련|대성당|재위|군포|대표적인\s*업적|베른|캔버라|오타와|제\d+회|작곡한\s*음악가|그린\s*화가|조각\s*대표작|건축\s*양식|식문화|향신료|파이토케미컬|절기|올림픽이\s*개최된|롱코스|에\s*대한\s*설명으로\s*가장\s*알맞은|감독|연기한\s*배우|개봉한|제작\s*국가|출신국|수상작|영화제|대표\s*캐릭터\s*이름/;
 
 // Household-name mega-popular entities allowed in intro for short clean prompts
 const INTRO_MEGA_MOVIE_RE = /기생충|겨울왕국|라이온\s*킹|해리\s*포터|타이타닉|어벤져스|아이언맨|스파이더맨|토이\s*스토리|인사이드\s*아웃|아바타|알라딘|신데렐라|미녀와\s*야수|인어공주|슈렉|쿵푸팬더|이웃집\s*토토로|센과\s*치히로|명량|극한직업|부산행|범죄도시|주토피아|코코|미니언즈|나\s*홀로\s*집에|쥬라기\s*공원|스타워즈|쿠키\s*영상|스포일러|카메오|팝콘|예고편|자막|더빙|뽀로로|둘리|도라에몽|톰과\s*제리|미키\s*마우스|곰돌이\s*푸/;
@@ -162,7 +163,67 @@ function rebalanceDifficulty({ id, category, difficulty, question, answer }) {
   return diff;
 }
 
+const BORING_CLONE_RE = /처음\s*개봉한\s*연대는|어느\s*나라를\s*대표하는\s*영화|어느\s*대륙에\s*속한|어느\s*시대와\s*관련|어느\s*신화\s*체계에\s*등장|어느\s*예술\s*사조에\s*속하|에\s*대한\s*설명으로\s*가장\s*알맞은|올바른\s*뜻풀이는\s*무엇인가요|올바른\s*뜻은\s*무엇인가요|대표적인\s*업적이나\s*저서로\s*옳은|대표적인\s*업적\s*또는\s*관련\s*사건으로\s*옳은|원자번호\s*\d+번에\s*해당하는|원소\s*기호\s*[A-Za-z]+\s*[이가]\s*나타내는/;
+
+function isBoringClone(id, question, answer) {
+  const isCurated = id.startsWith('cur-') || id.startsWith('intro-extra-');
+  if (isCurated) return false;
+  if (BORING_CLONE_RE.test(question)) return true;
+  if (answer.length > 24) return true;
+  // Drop tautological language giveaways like "인도네시아의 공용어는? -> 인도네시아어"
+  if (/공용어/.test(question) && answer.endsWith('어')) {
+    const stem = answer.slice(0, -1).trim();
+    if (stem.length >= 2 && question.includes(stem)) return true;
+  }
+  return false;
+}
+
+function normalizeAnswerKey(category, answer) {
+  return `${category}::${String(answer || '').replace(/\s*\(.*?\)/g, '').replace(/\s+/g, '').toLowerCase()}`;
+}
+
+function extractSubjectKey(category, question) {
+  const m = String(question || '').match(/'([^']{2,25})'|《([^》]{2,25})》|<([^>]{2,25})>/);
+  if (!m) return null;
+  const raw = (m[1] || m[2] || m[3]).replace(/\s+/g, '').toLowerCase();
+  return `${category}::${raw}`;
+}
+
+function getTemplateSignature(question) {
+  const txt = String(question || '');
+  if (/연출한\s*감독|감독은/.test(txt)) return 'tpl:movie-dir';
+  if (/연기한\s*배우|배우\s/.test(txt)) return 'tpl:movie-actor';
+  if (/대표\s*캐릭터/.test(txt)) return 'tpl:movie-char';
+  if (/영화\s*용어/.test(txt)) return 'tpl:movie-term';
+  if (/OST|주제가|영화음악/.test(txt)) return 'tpl:ost';
+  if (/명대사/.test(txt)) return 'tpl:quote';
+  if (/영화제|시상식|수상/.test(txt)) return 'tpl:award';
+  if (/원작/.test(txt)) return 'tpl:adapt';
+  if (/사자성어|고사성어/.test(txt)) return 'tpl:idiom';
+  if (/속담|관용구/.test(txt)) return 'tpl:proverb';
+  if (/순우리말/.test(txt)) return 'tpl:pure-kr';
+  if (/맞춤법|표준어|어문\s*규범/.test(txt)) return 'tpl:spelling';
+  if (/수도/.test(txt)) return 'tpl:capital';
+  if (/화폐|통화/.test(txt)) return 'tpl:currency';
+  if (/원소|주기율표/.test(txt)) return 'tpl:element';
+  if (/그린\s*화가|명화/.test(txt)) return 'tpl:painting';
+  if (/작곡한/.test(txt)) return 'tpl:composer';
+  if (/올림픽/.test(txt)) return 'tpl:olympic';
+  if (/국제기구|협약|의정서/.test(txt)) return 'tpl:intl';
+  if (/절기/.test(txt)) return 'tpl:solar-term';
+  if (/단축키/.test(txt)) return 'tpl:shortcut';
+  if (/수학자/.test(txt)) return 'tpl:math';
+  if (/철학자|사상가/.test(txt)) return 'tpl:philosopher';
+  if (/문학|소설|희곡/.test(txt)) return 'tpl:literature';
+  if (/음식|요리/.test(txt)) return 'tpl:food';
+  return 'tpl:free:' + txt.replace(/'[^']+'|《[^》]+》|<[^>]+>|"[^"]+"/g, 'X').replace(/\d+/g, 'N').slice(0, 12);
+}
+
 module.exports = {
   polishKoreanText,
-  rebalanceDifficulty
+  rebalanceDifficulty,
+  isBoringClone,
+  normalizeAnswerKey,
+  extractSubjectKey,
+  getTemplateSignature
 };
