@@ -25,7 +25,7 @@
       <footer class="home-credit">제작자 임진택</footer>
     </section>
 
-    <!-- 2. SOLO ENTRY -->
+    <!-- 2. SOLO ENTRY: 이름 + 영역 선택 + 시작 -->
     <section id="view-solo-entry" class="view" aria-label="1인 모드">
       <div class="top-nav">
         <button type="button" class="back-btn" data-back="view-home" aria-label="뒤로">←</button>
@@ -33,11 +33,12 @@
       <div class="center-stack entry-stack">
         <h2 class="screen-title">1인 모드</h2>
         <input id="soloNameInput" class="line-input" type="text" maxlength="16" placeholder="이름" autocomplete="nickname" />
+        <div id="soloCategoryBar" class="category-bar" role="radiogroup" aria-label="영역"></div>
         <button type="button" id="startSoloBtn" class="btn-solid">시작</button>
       </div>
     </section>
 
-    <!-- 3. LOCAL 2P DUEL ENTRY -->
+    <!-- 3. LOCAL 2P DUEL ENTRY: P1/P2 이름 + 영역 선택 + 시작 -->
     <section id="view-duel-entry" class="view" aria-label="2인 모드">
       <div class="top-nav">
         <button type="button" class="back-btn" data-back="view-home" aria-label="뒤로">←</button>
@@ -48,16 +49,18 @@
           <input id="p1NameInput" class="line-input" type="text" maxlength="16" placeholder="P1" autocomplete="off" />
           <input id="p2NameInput" class="line-input" type="text" maxlength="16" placeholder="P2" autocomplete="off" />
         </div>
+        <div id="duelCategoryBar" class="category-bar" role="radiogroup" aria-label="영역"></div>
         <button type="button" id="startDuelBtn" class="btn-solid">시작</button>
       </div>
     </section>
 
-    <!-- 4. RANKING (1인 모드 전용 · 최고 점수 덮어쓰기 · 년월일 시간) -->
+    <!-- 4. RANKING (1인 모드 전용 · 영역별 독립 · 최고점 덮어쓰기 · 일시) -->
     <section id="view-ranking" class="view" aria-label="랭킹">
       <div class="top-nav">
         <button type="button" class="back-btn" data-back="view-home" aria-label="뒤로">←</button>
         <h2 class="nav-title">랭킹</h2>
       </div>
+      <div id="rankingCategoryBar" class="category-bar ranking-cat-bar" role="tablist" aria-label="영역별 랭킹"></div>
       <div class="ranking-wrap">
         <div class="ranking-head">
           <span>#</span>
@@ -86,7 +89,11 @@
           </div>
         </header>
 
-        <div id="stagePips" class="stage-pips" aria-label="단계 진행"></div>
+        <!-- 10-Pip Stage Progress + Dynamic Sliding Cutline Marker -->
+        <div class="stage-pips-wrap" aria-label="단계 진행">
+          <div id="stagePips" class="stage-pips"></div>
+          <div id="cutlineMarker" class="cutline-marker" aria-hidden="true"></div>
+        </div>
 
         <div class="timer-track">
           <div id="timerFill" class="timer-fill"></div>
@@ -119,7 +126,7 @@
       </div>
     </section>
 
-    <!-- 6. LOCAL OFFLINE 2P DUEL (P1 / P2 Split Choices on One Screen) -->
+    <!-- 6. LOCAL OFFLINE 2P DUEL -->
     <section id="view-duel" class="view" aria-label="2인 대전">
       <div class="duel-wrap">
         <header class="quiz-header">
@@ -153,7 +160,6 @@
           <h2 id="duelQuestionText" class="question-text"></h2>
         </div>
 
-        <!-- Side-by-side P1 & P2 Choices -->
         <div class="duel-panels">
           <div class="duel-col" id="duelP1Col">
             <div class="duel-col-head">
@@ -185,9 +191,9 @@
     <!-- 7. STAGE CLEAR TRANSITION (Solo) -->
     <section id="view-stage-clear" class="view" aria-label="단계 통과">
       <div class="center-stack clear-stack">
-        <span id="clearedLabel" class="clear-kicker">초급 통과</span>
+        <span id="clearedLabel" class="clear-kicker">입문 통과</span>
         <div id="clearedRatio" class="clear-ratio">8 / 10</div>
-        <div id="nextStagePreview" class="next-stage-preview">중급 · 7개 이상 통과</div>
+        <div id="nextStagePreview" class="next-stage-preview">초급 · 6개 이상 통과</div>
         <button type="button" id="continueStageBtn" class="btn-solid">계속</button>
       </div>
     </section>

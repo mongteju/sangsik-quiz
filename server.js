@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const { WebSocketServer } = require('ws');
-const { selectQuestions, getStats } = require('./data/questions');
+const { CATEGORIES, selectQuestions, getStats } = require('./data/questions');
 const db = require('./db');
 
 const PORT = process.env.PORT || 3000;
@@ -11,6 +11,17 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+const VALID_CATEGORY_IDS = new Set(['all', ...CATEGORIES.map((c) => c.id)]);
+const CATEGORY_LABEL_MAP = new Map([
+  ['all', '전체'],
+  ...CATEGORIES.map((c) => [c.id, c.name])
+]);
+
+function sanitizeCategory(raw) {
+  const id = String(raw || 'all').trim();
+  return VALID_CATEGORY_IDS.has(id) ? id : 'all';
+}
 
 // ------------------------------------------------------------
 // Stage Progression Configuration (Solo: 10 Questions per Stage)
@@ -102,6 +113,7 @@ function sanitizeDuelQuestion(q, roundIndex, baseRounds, isOvertime, overtimeRou
     isOvertime,
     overtimeRound,
     stageLabel: isOvertime ? `연장 ${overtimeRound}` : (diffLabels[q.difficulty] || '상식'),
+    category: q.category,
     categoryName: q.categoryName,
     basePoints: q.basePoints,
     timeSec: q.timeSec,
@@ -131,7 +143,7 @@ function loadStageIntoSolo(session, stageNum) {
   const cfg = getStageConfig(stageNum);
   const questions = selectQuestions({
     difficulty: cfg.difficulty,
-    category: 'all',
+    category: session.category,
     count: cfg.count,
     seenIds: Array.from(session.usedIds)
   });
@@ -148,12 +160,15 @@ function loadStageIntoSolo(session, stageNum) {
 }
 
 // ------------------------------------------------------------
-// REST API — Meta & Rankings (1인 모드 전용)
+// REST API — Meta & Rankings (1인 모드 전용 · 영역별 독립)
 // ------------------------------------------------------------
 app.get('/api/meta', (req, res) => {
   const stats = getStats();
   res.json({
     totalQuestions: stats.totalQuestions,
+    byCategory: stats.byCategory,
+    byDifficulty: stats.byDifficulty,
+    categories: [{ id: 'all', name: '전체' }, ...CATEGORIES.map((c) => ({ id: c.id, name: c.name }))],
     dbMode: db.getDbMode()
   });
 });
@@ -161,8 +176,9 @@ app.get('/api/meta', (req, res) => {
 app.get('/api/rankings', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
-    const rankings = await db.getTopRankings(limit);
-    res.json({ rankings, dbMode: db.getDbMode() });
+    const category = sanitizeCategory(req.query.category);
+    const rankings = await db.getTopRankings(limit, category);
+    res.json({ category, rankings, dbMode: db.getDbMode() });
   } catch (err) {
     console.error('Failed to fetch rankings:', err);
     res.status(500).json({ error: '랭킹을 불러오지 못했습니다.' });
@@ -173,13 +189,16 @@ app.get('/api/rankings', async (req, res) => {
 // REST API — Solo Mode (Stage Cutline Progression)
 // ------------------------------------------------------------
 app.post('/api/quiz/start', (req, res) => {
-  const { nickname = '익명', seenIds = [] } = req.body || {};
+  const { nickname = '익명', category = 'all', seenIds = [] } = req.body || {};
+  const safeCategory = sanitizeCategory(category);
   const sessionId = crypto.randomBytes(10).toString('hex');
 
   const session = {
     sessionId,
     nickname: sanitizeNickname(nickname, '익명'),
-    usedIds: new Set(Array.isArray(seenIds) ? seenIds.slice(-1200) : []),
+    category: safeCategory,
+    categoryName: CATEGORY_LABEL_MAP.get(safeCategory) || '전체',
+    usedIds: new Set(Array.isArray(seenIds) ? seenIds.slice(-3000) : []),
     stage: 1,
     stageCfg: null,
     stageQuestions: [],
@@ -205,6 +224,8 @@ app.post('/api/quiz/start', (req, res) => {
   res.json({
     sessionId,
     nickname: session.nickname,
+    category: session.category,
+    categoryName: session.categoryName,
     stage: session.stageCfg,
     stageOutcomes: session.stageOutcomes,
     hintsLeft: session.hintsLeft,
@@ -341,6 +362,7 @@ app.post('/api/quiz/answer', async (req, res) => {
       const entry = {
         id: crypto.randomBytes(8).toString('hex'),
         nickname: session.nickname,
+        category: session.category,
         score: session.score,
         stageReached: cfg.stage,
         stageLabel: cfg.label,
@@ -356,10 +378,10 @@ app.post('/api/quiz/answer', async (req, res) => {
       let personalBestInfo = null;
       try {
         personalBestInfo = await db.upsertBestRanking(entry);
-        rankPosition = await db.getRankPositionByNickname(entry.nickname);
+        rankPosition = await db.getRankPositionByNickname(entry.nickname, entry.category);
         if (personalBestInfo.saved) {
-          const topRankings = await db.getTopRankings(50);
-          broadcastAll({ type: 'RANKING_UPDATED', rankings: topRankings });
+          const topRankings = await db.getTopRankings(50, entry.category);
+          broadcastAll({ type: 'RANKING_UPDATED', category: entry.category, rankings: topRankings });
         }
       } catch (err) {
         console.error('Failed to persist ranking:', err);
@@ -367,6 +389,7 @@ app.post('/api/quiz/answer', async (req, res) => {
 
       summary = {
         ...entry,
+        categoryName: session.categoryName,
         rankPosition,
         isPersonalBest: personalBestInfo ? personalBestInfo.isPersonalBest : true,
         bestScore: personalBestInfo ? personalBestInfo.record.score : entry.score
@@ -398,24 +421,27 @@ app.post('/api/quiz/answer', async (req, res) => {
 // REST API — Local Offline 2-Player Duel (10 Base Rounds + Sudden-Death Overtime)
 // ------------------------------------------------------------
 app.post('/api/duel/start', (req, res) => {
-  const { p1Name = 'P1', p2Name = 'P2', seenIds = [] } = req.body || {};
+  const { p1Name = 'P1', p2Name = 'P2', category = 'all', seenIds = [] } = req.body || {};
+  const safeCategory = sanitizeCategory(category);
   const duelId = crypto.randomBytes(10).toString('hex');
-  const usedIds = new Set(Array.isArray(seenIds) ? seenIds.slice(-1200) : []);
+  const usedIds = new Set(Array.isArray(seenIds) ? seenIds.slice(-3000) : []);
 
   // 10 base questions: 2 intro + 3 beginner + 3 intermediate + 2 advanced
-  const nQs = selectQuestions({ difficulty: 'intro', category: 'all', count: 2, seenIds: Array.from(usedIds) });
+  const nQs = selectQuestions({ difficulty: 'intro', category: safeCategory, count: 2, seenIds: Array.from(usedIds) });
   nQs.forEach((q) => usedIds.add(q.id));
-  const bQs = selectQuestions({ difficulty: 'beginner', category: 'all', count: 3, seenIds: Array.from(usedIds) });
+  const bQs = selectQuestions({ difficulty: 'beginner', category: safeCategory, count: 3, seenIds: Array.from(usedIds) });
   bQs.forEach((q) => usedIds.add(q.id));
-  const iQs = selectQuestions({ difficulty: 'intermediate', category: 'all', count: 3, seenIds: Array.from(usedIds) });
+  const iQs = selectQuestions({ difficulty: 'intermediate', category: safeCategory, count: 3, seenIds: Array.from(usedIds) });
   iQs.forEach((q) => usedIds.add(q.id));
-  const aQs = selectQuestions({ difficulty: 'advanced', category: 'all', count: 2, seenIds: Array.from(usedIds) });
+  const aQs = selectQuestions({ difficulty: 'advanced', category: safeCategory, count: 2, seenIds: Array.from(usedIds) });
   aQs.forEach((q) => usedIds.add(q.id));
 
   const questions = [...nQs, ...bQs, ...iQs, ...aQs];
 
   const duel = {
     duelId,
+    category: safeCategory,
+    categoryName: CATEGORY_LABEL_MAP.get(safeCategory) || '전체',
     p1: { name: sanitizeNickname(p1Name, 'P1'), score: 0, correct: 0, streak: 0 },
     p2: { name: sanitizeNickname(p2Name, 'P2'), score: 0, correct: 0, streak: 0 },
     baseRounds: 10,
@@ -432,6 +458,8 @@ app.post('/api/duel/start', (req, res) => {
 
   res.json({
     duelId,
+    category: duel.category,
+    categoryName: duel.categoryName,
     p1: duel.p1,
     p2: duel.p2,
     question: sanitizeDuelQuestion(duel.currentQuestion, 0, duel.baseRounds, false, 0)
@@ -449,7 +477,6 @@ app.post('/api/duel/answer', (req, res) => {
   const p1Correct = Number(p1Choice) === q.answerIndex;
   const p2Correct = Number(p2Choice) === q.answerIndex;
 
-  // Fair no-reflex scoring for both players simultaneously
   const pts = q.basePoints || 100;
   const p1Eval = evaluateAnswer({ basePoints: pts, isCorrect: p1Correct, usedHint: true, currentStreak: duel.p1.streak });
   const p2Eval = evaluateAnswer({ basePoints: pts, isCorrect: p2Correct, usedHint: true, currentStreak: duel.p2.streak });
@@ -490,20 +517,17 @@ app.post('/api/duel/answer', (req, res) => {
   let nextQuestion = null;
 
   if (duel.roundIndex < duel.baseRounds) {
-    // Still within regular 10 rounds
     duel.currentQuestion = duel.queue.shift();
     nextQuestion = sanitizeDuelQuestion(duel.currentQuestion, duel.roundIndex, duel.baseRounds, false, 0);
   } else if (duel.p1.score !== duel.p2.score) {
-    // Completed 10+ rounds and tie is broken -> Decisive winner!
     finished = true;
     duel.finished = true;
     winner = duel.p1.score > duel.p2.score ? 'p1' : 'p2';
   } else {
-    // Still tied after round 10+ -> Sudden-Death Overtime until settled!
     duel.overtimeRound += 1;
     const overtimePool = selectQuestions({
       difficulty: duel.overtimeRound <= 2 ? 'intermediate' : 'advanced',
-      category: 'all',
+      category: duel.category,
       count: 1,
       seenIds: Array.from(duel.usedIds)
     });

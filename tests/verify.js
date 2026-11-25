@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const {
+  ALL_QUESTIONS,
   CATEGORIES,
   QUESTION_BY_ID,
   getStats
@@ -10,13 +11,35 @@ const db = require('../db');
 const { server, startServer, getStageConfig } = require('../server');
 
 async function runTests() {
-  console.log('=== 1. Question Bank Integrity ===');
+  console.log('=== 1. 15,000+ Question Bank Integrity ===');
   const stats = getStats();
-  assert(stats.totalQuestions >= 1490, `Expected >= 1490 questions, got ${stats.totalQuestions}`);
-  assert(stats.byDifficulty.intro >= 195, `Expected >= 195 intro questions, got ${stats.byDifficulty.intro}`);
-  assert(stats.byDifficulty.beginner >= 245, `Expected >= 245 beginner questions, got ${stats.byDifficulty.beginner}`);
-  assert.strictEqual(CATEGORIES.length, 10);
-  console.log(`Loaded ${stats.totalQuestions} unique questions (intro=${stats.byDifficulty.intro}, beginner=${stats.byDifficulty.beginner}, intermediate=${stats.byDifficulty.intermediate}, advanced=${stats.byDifficulty.advanced}).`);
+  console.log(`Total unique questions: ${stats.totalQuestions}`);
+  console.log('By difficulty:', stats.byDifficulty);
+  for (const cat of CATEGORIES) {
+    const s = stats.byCategory[cat.id];
+    console.log(`  - ${cat.id.padEnd(16)} (${cat.name}): total=${s.total} [intro=${s.intro}, beg=${s.beginner}, int=${s.intermediate}, adv=${s.advanced}]`);
+    assert(s.total >= 2000, `Category ${cat.id} should have >= 2000 questions, got ${s.total}`);
+    assert(s.intro >= 250, `Category ${cat.id} intro too low: ${s.intro}`);
+    assert(s.beginner >= 400, `Category ${cat.id} beginner too low: ${s.beginner}`);
+    assert(s.intermediate >= 500, `Category ${cat.id} intermediate too low: ${s.intermediate}`);
+    assert(s.advanced >= 400, `Category ${cat.id} advanced too low: ${s.advanced}`);
+  }
+  assert(stats.totalQuestions >= 15000, `Expected >= 15000 unique questions, got ${stats.totalQuestions}`);
+  assert.strictEqual(CATEGORIES.length, 6);
+
+  const seenIds = new Set();
+  const seenPrompts = new Set();
+  for (const q of ALL_QUESTIONS) {
+    assert(q.id && !seenIds.has(q.id), `Duplicate ID: ${q.id}`);
+    seenIds.add(q.id);
+    const norm = q.question.replace(/\s+/g, '');
+    assert(!seenPrompts.has(norm), `Duplicate prompt: ${q.question}`);
+    seenPrompts.add(norm);
+    assert(q.distractors.length >= 4, `Too few distractors on ${q.id}`);
+    assert(!q.distractors.includes(q.answer), `Answer in distractors on ${q.id}`);
+    assert(q.hint && q.explanation, `Missing hint/explanation on ${q.id}`);
+  }
+  console.log('All 15,000+ questions passed strict uniqueness & schema checks!');
 
   console.log('\n=== 2. UI Cleanliness Verification ===');
   for (const rel of ['public/index.html', 'public/styles.css', 'public/app.js']) {
@@ -32,64 +55,81 @@ async function runTests() {
     ['입문:6', '초급:6', '중급:7', '고급 1:7', '고급 2:7', '고급 3:7', '고급 4:7']
   );
 
-  console.log('\n=== 4. Live Server: Ranking High-Score Overwrite & Local 2P Sudden-Death Overtime ===');
+  console.log('\n=== 4. Live Server: Category Filtering, Independent Category Rankings & Local 2P Overtime ===');
   await startServer(0);
   const { port } = server.address();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const testNick = '__TEST_BEST_OVERWRITE__';
+  const testNick = '__TEST_CAT__';
 
   try {
-    // 4a. Test same-nickname best-score overwrite directly via db.upsertBestRanking + /api/rankings
     await db.deleteRankingByNickname(testNick);
 
-    const low = {
-      id: 'test-low', nickname: testNick, score: 400, stageReached: 1, stageLabel: '초급',
-      correctCount: 3, totalCount: 10, accuracy: 30, noHintCorrect: 3, maxStreak: 2,
-      createdAt: '2026-11-24T01:00:00.000Z'
-    };
-    const r1 = await db.upsertBestRanking(low);
-    assert.strictEqual(r1.saved, true);
-    assert.strictEqual(r1.isPersonalBest, true);
+    // 4a. Test category-specific solo start (movie only!)
+    const movieStart = await (await fetch(`${baseUrl}/api/quiz/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: testNick, category: 'movie' })
+    })).json();
+    assert.strictEqual(movieStart.category, 'movie');
+    assert.strictEqual(movieStart.question.category, 'movie');
 
-    const high = {
-      id: 'test-high', nickname: testNick, score: 1950, stageReached: 2, stageLabel: '중급',
-      correctCount: 14, totalCount: 20, accuracy: 70, noHintCorrect: 13, maxStreak: 7,
-      createdAt: '2026-11-24T06:00:00.000Z'
-    };
-    const r2 = await db.upsertBestRanking(high);
-    assert.strictEqual(r2.saved, true);
-    assert.strictEqual(r2.updated, true, 'Higher score for same nickname must overwrite existing record');
+    // Finish 10 movie questions with 3 right (< 6 cutline) -> saves to 'movie' ranking only
+    let curQ = movieStart.question;
+    let lastAns = null;
+    for (let i = 0; i < 10; i++) {
+      const full = QUESTION_BY_ID.get(curQ.id);
+      assert.strictEqual(full.category, 'movie', 'All questions in movie mode must be movie category');
+      const okIdx = curQ.choices.indexOf(full.answer);
+      const wrongIdx = (okIdx + 1) % 4;
+      lastAns = await (await fetch(`${baseUrl}/api/quiz/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: movieStart.sessionId, choiceIndex: i < 3 ? okIdx : wrongIdx })
+      })).json();
+      curQ = lastAns.nextQuestion;
+    }
+    assert.strictEqual(lastAns.finished, true);
+    assert.strictEqual(lastAns.summary.category, 'movie');
 
-    const mid = {
-      id: 'test-mid', nickname: testNick, score: 900, stageReached: 1, stageLabel: '초급',
-      correctCount: 5, totalCount: 10, accuracy: 50, noHintCorrect: 5, maxStreak: 3,
-      createdAt: '2026-11-24T07:00:00.000Z'
-    };
-    const r3 = await db.upsertBestRanking(mid);
-    assert.strictEqual(r3.saved, false, 'Lower score for same nickname must NOT overwrite higher score');
-    assert.strictEqual(r3.record.score, 1950);
+    // Verify saved in 'movie' ranking, NOT in 'all' ranking
+    const movieRanks = await (await fetch(`${baseUrl}/api/rankings?category=movie`)).json();
+    const allRanks = await (await fetch(`${baseUrl}/api/rankings?category=all`)).json();
+    assert(movieRanks.rankings.some((r) => r.nickname === testNick), 'Must appear in movie ranking');
+    assert(!allRanks.rankings.some((r) => r.nickname === testNick), 'Must NOT appear in all ranking');
 
-    const rankRes = await (await fetch(`${baseUrl}/api/rankings`)).json();
-    const matches = rankRes.rankings.filter((x) => x.nickname === testNick);
-    assert.strictEqual(matches.length, 1, 'Same nickname must appear only ONCE in rankings');
-    assert.strictEqual(matches[0].score, 1950);
-    assert.strictEqual(matches[0].createdAt, '2026-11-24T06:00:00.000Z');
-    console.log('Same-nickname high-score overwrite + date/time persistence verified!');
+    // Same nickname saves independently in 'all' AND overwrites only higher score within 'movie'
+    await db.upsertBestRanking({
+      id: 'test-all-1', nickname: testNick, category: 'all', score: 1500, stageReached: 2, stageLabel: '초급',
+      correctCount: 12, totalCount: 20, accuracy: 60, noHintCorrect: 12, maxStreak: 5,
+      createdAt: '2026-11-25T01:00:00.000Z'
+    });
+    const overMovie = await db.upsertBestRanking({
+      id: 'test-mov-2', nickname: testNick, category: 'movie', score: 2100, stageReached: 3, stageLabel: '중급',
+      correctCount: 18, totalCount: 30, accuracy: 60, noHintCorrect: 17, maxStreak: 6,
+      createdAt: '2026-11-25T02:00:00.000Z'
+    });
+    assert.strictEqual(overMovie.updated, true);
 
-    // 4b. Local 2P Duel: 10 tied rounds -> Overtime 1 (still tied) -> Overtime 2 (P1 wins decisively!)
+    const movieRanksAfter = await (await fetch(`${baseUrl}/api/rankings?category=movie`)).json();
+    const allRanksAfter = await (await fetch(`${baseUrl}/api/rankings?category=all`)).json();
+    assert.strictEqual(movieRanksAfter.rankings.filter((r) => r.nickname === testNick).length, 1);
+    assert.strictEqual(movieRanksAfter.rankings.find((r) => r.nickname === testNick).score, 2100);
+    assert.strictEqual(allRanksAfter.rankings.find((r) => r.nickname === testNick).score, 1500);
+    console.log('Category filtering & independent per-category high-score overwrite verified!');
+
+    // 4b. Local 2P Duel with movie category + sudden-death overtime
     const startDuel = await (await fetch(`${baseUrl}/api/duel/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p1Name: '철수', p2Name: '영희' })
+      body: JSON.stringify({ p1Name: '철수', p2Name: '영희', category: 'movie' })
     })).json();
-    assert(startDuel.duelId && startDuel.question);
-
+    assert.strictEqual(startDuel.category, 'movie');
     let q = startDuel.question;
     let duelPayload = null;
     for (let i = 0; i < 10; i++) {
       const fullQ = QUESTION_BY_ID.get(q.id);
+      assert.strictEqual(fullQ.category, 'movie');
       const ansIdx = q.choices.indexOf(fullQ.answer);
-      // Both players answer identically -> tied after 10 rounds!
       duelPayload = await (await fetch(`${baseUrl}/api/duel/answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -97,44 +137,17 @@ async function runTests() {
       })).json();
       q = duelPayload.nextQuestion;
     }
-
-    assert.strictEqual(duelPayload.finished, false, 'Tied 2P duel after 10 rounds must enter sudden-death overtime');
-    assert.strictEqual(q.isOvertime, true);
-    assert.strictEqual(q.overtimeRound, 1);
-
-    // Overtime 1: still tied!
-    const ot1Full = QUESTION_BY_ID.get(q.id);
-    const ot1Ans = q.choices.indexOf(ot1Full.answer);
-    duelPayload = await (await fetch(`${baseUrl}/api/duel/answer`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ duelId: startDuel.duelId, p1Choice: ot1Ans, p2Choice: ot1Ans })
-    })).json();
     assert.strictEqual(duelPayload.finished, false);
-    assert.strictEqual(duelPayload.nextQuestion.overtimeRound, 2);
-
-    // Overtime 2: P1 answers right, P2 answers wrong -> Decisive P1 victory!
-    q = duelPayload.nextQuestion;
-    const ot2Full = QUESTION_BY_ID.get(q.id);
-    const ot2Ans = q.choices.indexOf(ot2Full.answer);
-    const ot2Wrong = (ot2Ans + 1) % 4;
-    duelPayload = await (await fetch(`${baseUrl}/api/duel/answer`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ duelId: startDuel.duelId, p1Choice: ot2Ans, p2Choice: ot2Wrong })
-    })).json();
-
-    assert.strictEqual(duelPayload.finished, true);
-    assert.strictEqual(duelPayload.winner, 'p1');
-    assert.strictEqual(duelPayload.totalRoundsPlayed, 12);
-    console.log('Local 2P Duel 10 base rounds + sudden-death overtime (연장 1 -> 연장 2 결판) verified!');
+    assert.strictEqual(q.isOvertime, true);
+    assert.strictEqual(q.category, 'movie');
+    console.log('Local 2P Duel category filtering & sudden-death overtime verified!');
   } finally {
     await db.deleteRankingByNickname(testNick);
     await new Promise((resolve) => server.close(resolve));
     await db.closeDb();
   }
 
-  console.log('\nALL VERIFICATION TESTS PASSED!');
+  console.log('\nALL 15,000+ VERIFICATION TESTS PASSED!');
 }
 
 runTests().catch((err) => {

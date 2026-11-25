@@ -8,9 +8,24 @@
     seenIds: 'quiz_seen_ids'
   };
 
+  const CATEGORIES = [
+    { id: 'all', name: '전체' },
+    { id: 'movie', name: '영화' },
+    { id: 'philosophy_lang', name: '철학·언어' },
+    { id: 'history_geo', name: '역사·지리' },
+    { id: 'science_tech', name: '과학·기술' },
+    { id: 'society', name: '시사·사회' },
+    { id: 'arts_life', name: '예술·생활' }
+  ];
+
   const state = {
     ws: null,
     seenIds: [],
+
+    // Selected categories
+    soloCategory: 'all',
+    duelCategory: 'all',
+    rankingCategory: 'all',
 
     // Solo state
     soloSessionId: null,
@@ -86,6 +101,41 @@
   }
 
   // ------------------------------------------------------------
+  // Category Selector Bars (Solo / Duel / Ranking)
+  // ------------------------------------------------------------
+  function renderCategoryBar(containerSel, activeId, onSelect) {
+    const container = $(containerSel);
+    container.innerHTML = CATEGORIES
+      .map((c) => `
+        <button type="button" class="cat-btn ${c.id === activeId ? 'active' : ''}" data-cat="${c.id}">
+          ${escapeHtml(c.name)}
+        </button>
+      `)
+      .join('');
+
+    container.querySelectorAll('.cat-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.cat;
+        container.querySelectorAll('.cat-btn').forEach((b) => b.classList.toggle('active', b.dataset.cat === id));
+        onSelect(id);
+      });
+    });
+  }
+
+  function initCategoryBars() {
+    renderCategoryBar('#soloCategoryBar', state.soloCategory, (id) => {
+      state.soloCategory = id;
+    });
+    renderCategoryBar('#duelCategoryBar', state.duelCategory, (id) => {
+      state.duelCategory = id;
+    });
+    renderCategoryBar('#rankingCategoryBar', state.rankingCategory, (id) => {
+      state.rankingCategory = id;
+      fetchRankings(id);
+    });
+  }
+
+  // ------------------------------------------------------------
   // Local Storage Prefs
   // ------------------------------------------------------------
   function loadLocalPrefs() {
@@ -103,7 +153,7 @@
   function recordSeenId(id) {
     if (!id || state.seenIds.includes(id)) return;
     state.seenIds.push(id);
-    if (state.seenIds.length > 1500) state.seenIds = state.seenIds.slice(-1500);
+    if (state.seenIds.length > 3500) state.seenIds = state.seenIds.slice(-3500);
     localStorage.setItem(STORAGE_KEYS.seenIds, JSON.stringify(state.seenIds));
   }
 
@@ -117,7 +167,11 @@
     ws.addEventListener('message', (ev) => {
       try {
         const msg = JSON.parse(ev.data);
-        if (msg.type === 'RANKING_UPDATED' && $('#view-ranking').classList.contains('active')) {
+        if (
+          msg.type === 'RANKING_UPDATED' &&
+          $('#view-ranking').classList.contains('active') &&
+          (msg.category || 'all') === state.rankingCategory
+        ) {
           renderRankings(msg.rankings || []);
         }
       } catch {
@@ -132,12 +186,21 @@
   }
 
   // ------------------------------------------------------------
-  // Real-Time Ranking (1인 모드 전용 · 최고 점수 덮어쓰기 · 일시)
+  // Real-Time Ranking (1인 모드 전용 · 영역별 독립)
   // ------------------------------------------------------------
-  async function openRanking() {
+  async function openRanking(category = state.rankingCategory) {
+    state.rankingCategory = category || 'all';
+    renderCategoryBar('#rankingCategoryBar', state.rankingCategory, (id) => {
+      state.rankingCategory = id;
+      fetchRankings(id);
+    });
     showView('view-ranking');
+    await fetchRankings(state.rankingCategory);
+  }
+
+  async function fetchRankings(category = 'all') {
     try {
-      const res = await fetch('/api/rankings?limit=50');
+      const res = await fetch(`/api/rankings?category=${encodeURIComponent(category)}&limit=50`);
       const data = await res.json();
       renderRankings(data.rankings || []);
     } catch {
@@ -207,7 +270,7 @@
   }
 
   // ------------------------------------------------------------
-  // SOLO MODE (Stage Cutline Progression)
+  // SOLO MODE (Stage Cutline Progression + Dynamic Sliding Cutline)
   // ------------------------------------------------------------
   function renderStagePips(outcomes, currentIndex, cutline, total = 10) {
     const html = [];
@@ -215,10 +278,43 @@
       let cls = 'pip';
       if (i < outcomes.length) cls += outcomes[i] ? ' ok' : ' no';
       else if (i === currentIndex) cls += ' current';
-      if (cutline && i + 1 === cutline && cutline < total) cls += ' cutline';
       html.push(`<span class="${cls}"></span>`);
     }
     $('#stagePips').innerHTML = html.join('');
+
+    // Dynamic cutline marker: shifts +1 slot right for every wrong answer
+    const wrongCount = outcomes.filter((v) => v === false).length;
+    const correctCount = outcomes.filter((v) => v === true).length;
+    const requiredSlot = cutline + wrongCount;
+    const marker = $('#cutlineMarker');
+
+    if (!marker) return;
+
+    if (correctCount >= cutline) {
+      // Already secured stage passage! Lock marker at the clinching pip in green
+      let seenCorrect = 0;
+      let clinchSlot = cutline;
+      for (let i = 0; i < outcomes.length; i++) {
+        if (outcomes[i]) {
+          seenCorrect += 1;
+          if (seenCorrect === cutline) {
+            clinchSlot = i + 1;
+            break;
+          }
+        }
+      }
+      marker.style.left = `${(clinchSlot / total) * 100}%`;
+      marker.classList.add('passed');
+      marker.classList.remove('impossible');
+    } else if (requiredSlot > total) {
+      // Passing is mathematically impossible now
+      marker.style.left = '100%';
+      marker.classList.add('impossible');
+      marker.classList.remove('passed');
+    } else {
+      marker.style.left = `${(requiredSlot / total) * 100}%`;
+      marker.classList.remove('passed', 'impossible');
+    }
   }
 
   function updateSoloHints() {
@@ -279,7 +375,11 @@
       const res = await fetch('/api/quiz/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nickname, seenIds: state.seenIds })
+        body: JSON.stringify({
+          nickname,
+          category: state.soloCategory,
+          seenIds: state.seenIds
+        })
       });
       const data = await res.json();
       if (!res.ok) return showToast(data.error || '시작 실패');
@@ -403,18 +503,21 @@
 
   function showSoloResult(summary) {
     stopTimer();
-    $('#resultTitle').textContent = `${summary.stageLabel} 종료`;
+    const prefix = summary.category && summary.category !== 'all' ? `${summary.categoryName} · ` : '';
+    $('#resultTitle').textContent = `${prefix}${summary.stageLabel} 종료`;
     $('#resultScore').textContent = Number(summary.score).toLocaleString();
 
     const rankText = summary.rankPosition ? `${summary.rankPosition}위` : '-';
     const bestTag = summary.isPersonalBest ? '최고 기록' : `최고 ${Number(summary.bestScore).toLocaleString()}`;
     $('#resultMetaRow').innerHTML = `
+      <span>영역<strong>${escapeHtml(summary.categoryName || '전체')}</strong></span>
       <span>단계<strong>${escapeHtml(summary.stageLabel)}</strong></span>
       <span>정답<strong>${summary.correctCount} / ${summary.totalCount}</strong></span>
       <span>순위<strong>${rankText}</strong></span>
       <span><strong>${bestTag}</strong></span>
     `;
 
+    state.rankingCategory = summary.category || 'all';
     $('#retrySoloBtn').classList.remove('hidden');
     $('#retryDuelBtn').classList.add('hidden');
     $('#resultRankingBtn').classList.remove('hidden');
@@ -422,7 +525,7 @@
   }
 
   // ------------------------------------------------------------
-  // LOCAL OFFLINE 2-PLAYER DUEL (P1 & P2 Split Choices + Sudden-Death Overtime)
+  // LOCAL OFFLINE 2-PLAYER DUEL
   // ------------------------------------------------------------
   async function startLocalDuel() {
     const p1Raw = $('#p1NameInput').value.trim();
@@ -437,7 +540,12 @@
       const res = await fetch('/api/duel/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p1Name, p2Name, seenIds: state.seenIds })
+        body: JSON.stringify({
+          p1Name,
+          p2Name,
+          category: state.duelCategory,
+          seenIds: state.seenIds
+        })
       });
       const data = await res.json();
       if (!res.ok) return showToast(data.error || '시작 실패');
@@ -518,16 +626,12 @@
       if (state.duelP1Choice !== null) return;
       state.duelP1Choice = choiceIdx;
       $('#duelP1State').textContent = '선택 완료';
-      if (state.duelP2Choice === null) {
-        $('#duelP1Col').classList.add('locked-hidden');
-      }
+      if (state.duelP2Choice === null) $('#duelP1Col').classList.add('locked-hidden');
     } else {
       if (state.duelP2Choice !== null) return;
       state.duelP2Choice = choiceIdx;
       $('#duelP2State').textContent = '선택 완료';
-      if (state.duelP1Choice === null) {
-        $('#duelP2Col').classList.add('locked-hidden');
-      }
+      if (state.duelP1Choice === null) $('#duelP2Col').classList.add('locked-hidden');
     }
 
     if (state.duelP1Choice !== null && state.duelP2Choice !== null) {
@@ -561,7 +665,6 @@
       $('#duelP1Score').textContent = Number(data.p1.score).toLocaleString();
       $('#duelP2Score').textContent = Number(data.p2.score).toLocaleString();
 
-      // Highlight P1 choices
       const p1CorrectBtn = $(`#duelP1Choices .choice-item[data-index="${r.answerIndex}"]`);
       if (p1CorrectBtn) p1CorrectBtn.classList.add('correct');
       if (!r.p1.isCorrect && r.p1.choiceIndex >= 0) {
@@ -570,7 +673,6 @@
       }
       $('#duelP1State').textContent = r.p1.isCorrect ? `+${r.p1.pointsEarned}` : '오답';
 
-      // Highlight P2 choices
       const p2CorrectBtn = $(`#duelP2Choices .choice-item[data-index="${r.answerIndex}"]`);
       if (p2CorrectBtn) p2CorrectBtn.classList.add('correct');
       if (!r.p2.isCorrect && r.p2.choiceIndex >= 0) {
@@ -592,13 +694,9 @@
       state.duelTotalRounds = data.totalRoundsPlayed;
 
       const nextBtn = $('#nextDuelBtn');
-      if (data.finished) {
-        nextBtn.textContent = '결과';
-      } else if (data.nextQuestion?.isOvertime) {
-        nextBtn.textContent = `연장 ${data.nextQuestion.overtimeRound}`;
-      } else {
-        nextBtn.textContent = '다음';
-      }
+      if (data.finished) nextBtn.textContent = '결과';
+      else if (data.nextQuestion?.isOvertime) nextBtn.textContent = `연장 ${data.nextQuestion.overtimeRound}`;
+      else nextBtn.textContent = '다음';
 
       $('#duelReveal').classList.remove('hidden');
       state.duelRevealAt = Date.now();
@@ -641,8 +739,8 @@
       $('#p1NameInput').focus();
     });
 
-    $('#goRankingBtn').addEventListener('click', openRanking);
-    $('#resultRankingBtn').addEventListener('click', openRanking);
+    $('#goRankingBtn').addEventListener('click', () => openRanking('all'));
+    $('#resultRankingBtn').addEventListener('click', () => openRanking(state.rankingCategory));
 
     $$('.back-btn[data-back]').forEach((btn) => {
       btn.addEventListener('click', () => showView(btn.dataset.back));
@@ -686,18 +784,15 @@
     $('#retryDuelBtn').addEventListener('click', startLocalDuel);
     $('#resultHomeBtn').addEventListener('click', () => showView('view-home'));
 
-    // Keyboard shortcuts (Solo: 1~4, Enter/Space | Local 2P: P1=1~4, P2=7/8/9/0 or Numpad 1~4, Enter/Space)
     document.addEventListener('keydown', (e) => {
       if (document.activeElement?.tagName === 'INPUT') return;
 
-      // Stage Clear view
       if ($('#view-stage-clear').classList.contains('active') && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();
         if (Date.now() - state.stageClearAt > 120) $('#continueStageBtn').click();
         return;
       }
 
-      // Solo Quiz view
       if ($('#view-quiz').classList.contains('active')) {
         if (!state.soloAnswered && ['1', '2', '3', '4'].includes(e.key)) {
           const btn = $(`#choicesList .choice-item[data-index="${Number(e.key) - 1}"]`);
@@ -713,7 +808,6 @@
         return;
       }
 
-      // Local 2P Duel view
       if ($('#view-duel').classList.contains('active')) {
         if (!state.duelResolved) {
           if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3' || e.code === 'Digit4') {
@@ -734,7 +828,6 @@
       }
     });
 
-    // Left-click anywhere after reveal advances immediately (Solo, Local 2P, Stage Clear)
     document.addEventListener('click', (e) => {
       if (e.button !== 0 || e.target.closest('button')) return;
 
@@ -763,6 +856,7 @@
   }
 
   loadLocalPrefs();
+  initCategoryBars();
   bindEvents();
   connectWs();
 })();

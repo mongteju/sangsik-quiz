@@ -256,6 +256,47 @@ button, input {
   width: 100%;
 }
 
+/* Minimal Borderless Category Selector */
+.entry-stack {
+  max-width: 480px;
+}
+
+.category-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+  width: 100%;
+  margin: -10px 0 30px;
+}
+
+.ranking-cat-bar {
+  justify-content: flex-start;
+  margin: 0 0 22px;
+}
+
+.cat-btn {
+  border: none;
+  background: transparent;
+  padding: 5px 2px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink-3);
+  border-bottom: 1.5px solid transparent;
+  cursor: pointer;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+
+.cat-btn:hover {
+  color: var(--ink-2);
+}
+
+.cat-btn.active {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--ink);
+}
+
 /* ==========================================================================
    Ranking View (Borderless Typographic Table with Date & Time)
    ========================================================================== */
@@ -445,18 +486,21 @@ button, input {
   color: var(--ink-3);
 }
 
-/* 10-Pip Stage Progress Track */
+/* 10-Pip Stage Progress Track + Dynamic Sliding Cutline Marker */
+.stage-pips-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
 .stage-pips {
   display: grid;
   grid-template-columns: repeat(10, 1fr);
   gap: 6px;
-  margin-bottom: 10px;
 }
 
 .pip {
   height: 3px;
   background: var(--line);
-  position: relative;
   transition: background-color 0.25s var(--ease);
 }
 
@@ -472,14 +516,24 @@ button, input {
   background: rgba(20, 20, 19, 0.42);
 }
 
-.pip.cutline::after {
-  content: '';
+.cutline-marker {
   position: absolute;
-  right: -3.5px;
-  top: -3px;
-  width: 1px;
-  height: 9px;
-  background: var(--ink-3);
+  top: -5px;
+  width: 2px;
+  height: 13px;
+  background: var(--ink);
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: left 0.32s var(--ease), background-color 0.25s var(--ease), opacity 0.25s var(--ease);
+}
+
+.cutline-marker.passed {
+  background: var(--ok);
+}
+
+.cutline-marker.impossible {
+  background: var(--no);
+  opacity: 0.38;
 }
 
 /* Thin Timer Hairline */

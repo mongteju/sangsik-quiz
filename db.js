@@ -31,6 +31,7 @@ function mapRow(row) {
   return {
     id: row.id,
     nickname: row.nickname,
+    category: row.category || 'all',
     score: Number(row.score),
     stageReached: Number(row.stage_reached),
     stageLabel: row.stage_label,
@@ -43,9 +44,6 @@ function mapRow(row) {
   };
 }
 
-/**
- * Returns true if candidate is strictly better than existing record (zero speed factor).
- */
 function isBetterRecord(candidate, existing) {
   if (candidate.score !== existing.score) return candidate.score > existing.score;
   if (candidate.stageReached !== existing.stageReached) return candidate.stageReached > existing.stageReached;
@@ -55,14 +53,28 @@ function isBetterRecord(candidate, existing) {
   return false;
 }
 
-async function deduplicateByNickname() {
-  const all = await getTopRankings(1000);
+async function deduplicateByNicknameAndCategory() {
+  let rows;
+  if (mode === 'postgres') {
+    const res = await pgPool.query(
+      `SELECT * FROM rankings
+       ORDER BY score DESC, stage_reached DESC, accuracy DESC, no_hint_correct DESC, max_streak DESC, created_at ASC`
+    );
+    rows = res.rows.map(mapRow);
+  } else {
+    rows = sqliteDb.prepare(
+      `SELECT * FROM rankings
+       ORDER BY score DESC, stage_reached DESC, accuracy DESC, no_hint_correct DESC, max_streak DESC, created_at ASC`
+    ).all().map(mapRow);
+  }
+
   const seen = new Set();
-  for (const row of all) {
-    if (seen.has(row.nickname)) {
+  for (const row of rows) {
+    const key = `${row.nickname}::${row.category || 'all'}`;
+    if (seen.has(key)) {
       await deleteRanking(row.id);
     } else {
-      seen.add(row.nickname);
+      seen.add(key);
     }
   }
 }
@@ -79,6 +91,7 @@ async function initDb() {
       CREATE TABLE IF NOT EXISTS rankings (
         id TEXT PRIMARY KEY,
         nickname TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'all',
         score INTEGER NOT NULL,
         stage_reached INTEGER NOT NULL,
         stage_label TEXT NOT NULL,
@@ -89,11 +102,12 @@ async function initDb() {
         max_streak INTEGER NOT NULL,
         created_at TEXT NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_rankings_order
-        ON rankings (score DESC, stage_reached DESC, accuracy DESC, no_hint_correct DESC, max_streak DESC, created_at ASC);
-      CREATE INDEX IF NOT EXISTS idx_rankings_nickname ON rankings (nickname);
+      ALTER TABLE rankings ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'all';
+      CREATE INDEX IF NOT EXISTS idx_rankings_cat_order
+        ON rankings (category, score DESC, stage_reached DESC, accuracy DESC, no_hint_correct DESC, max_streak DESC, created_at ASC);
+      CREATE INDEX IF NOT EXISTS idx_rankings_nick_cat ON rankings (nickname, category);
     `);
-    await deduplicateByNickname();
+    await deduplicateByNicknameAndCategory();
     return { mode };
   }
 
@@ -106,6 +120,7 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS rankings (
       id TEXT PRIMARY KEY,
       nickname TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'all',
       score INTEGER NOT NULL,
       stage_reached INTEGER NOT NULL,
       stage_label TEXT NOT NULL,
@@ -116,62 +131,76 @@ async function initDb() {
       max_streak INTEGER NOT NULL,
       created_at TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_rankings_order
-      ON rankings (score DESC, stage_reached DESC, accuracy DESC, no_hint_correct DESC, max_streak DESC, created_at ASC);
-    CREATE INDEX IF NOT EXISTS idx_rankings_nickname ON rankings (nickname);
   `);
-  await deduplicateByNickname();
+
+  // Safe migration for existing SQLite databases created before category column
+  const cols = sqliteDb.prepare('PRAGMA table_info(rankings)').all();
+  if (!cols.some((c) => c.name === 'category')) {
+    sqliteDb.exec(`ALTER TABLE rankings ADD COLUMN category TEXT NOT NULL DEFAULT 'all';`);
+  }
+
+  sqliteDb.exec(`
+    CREATE INDEX IF NOT EXISTS idx_rankings_cat_order
+      ON rankings (category, score DESC, stage_reached DESC, accuracy DESC, no_hint_correct DESC, max_streak DESC, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_rankings_nick_cat ON rankings (nickname, category);
+  `);
+
+  await deduplicateByNicknameAndCategory();
   return { mode, path: SQLITE_PATH };
 }
 
-async function findByNickname(nickname) {
+async function findByNicknameAndCategory(nickname, category = 'all') {
+  const cat = category || 'all';
   if (mode === 'postgres') {
-    const res = await pgPool.query('SELECT * FROM rankings WHERE nickname = $1 LIMIT 1', [nickname]);
+    const res = await pgPool.query(
+      'SELECT * FROM rankings WHERE nickname = $1 AND category = $2 LIMIT 1',
+      [nickname, cat]
+    );
     return res.rows[0] ? mapRow(res.rows[0]) : null;
   }
-  const row = sqliteDb.prepare('SELECT * FROM rankings WHERE nickname = ? LIMIT 1').get(nickname);
+  const row = sqliteDb
+    .prepare('SELECT * FROM rankings WHERE nickname = ? AND category = ? LIMIT 1')
+    .get(nickname, cat);
   return row ? mapRow(row) : null;
 }
 
-/**
- * Upserts a ranking record for a nickname:
- * - Inserts if nickname does not exist yet
- * - Overwrites existing record ONLY if the new score/record is strictly higher
- * - Keeps existing record untouched if new score is equal or lower
- */
 async function upsertBestRanking(entry) {
-  const existing = await findByNickname(entry.nickname);
+  const category = entry.category || 'all';
+  const normalized = { ...entry, category };
+  const existing = await findByNicknameAndCategory(normalized.nickname, category);
 
   if (!existing) {
     if (mode === 'postgres') {
       await pgPool.query(
         `INSERT INTO rankings (
-          id, nickname, score, stage_reached, stage_label,
+          id, nickname, category, score, stage_reached, stage_label,
           correct_count, total_count, accuracy, no_hint_correct, max_streak, created_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
         [
-          entry.id, entry.nickname, entry.score, entry.stageReached, entry.stageLabel,
-          entry.correctCount, entry.totalCount, entry.accuracy, entry.noHintCorrect,
-          entry.maxStreak, entry.createdAt
+          normalized.id, normalized.nickname, category, normalized.score,
+          normalized.stageReached, normalized.stageLabel, normalized.correctCount,
+          normalized.totalCount, normalized.accuracy, normalized.noHintCorrect,
+          normalized.maxStreak, normalized.createdAt
         ]
       );
     } else {
       sqliteDb.prepare(`
         INSERT INTO rankings (
-          id, nickname, score, stage_reached, stage_label,
+          id, nickname, category, score, stage_reached, stage_label,
           correct_count, total_count, accuracy, no_hint_correct, max_streak, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        entry.id, entry.nickname, entry.score, entry.stageReached, entry.stageLabel,
-        entry.correctCount, entry.totalCount, entry.accuracy, entry.noHintCorrect,
-        entry.maxStreak, entry.createdAt
+        normalized.id, normalized.nickname, category, normalized.score,
+        normalized.stageReached, normalized.stageLabel, normalized.correctCount,
+        normalized.totalCount, normalized.accuracy, normalized.noHintCorrect,
+        normalized.maxStreak, normalized.createdAt
       );
     }
-    return { saved: true, updated: false, isPersonalBest: true, record: entry };
+    return { saved: true, updated: false, isPersonalBest: true, record: normalized };
   }
 
-  if (isBetterRecord(entry, existing)) {
-    const updatedRecord = { ...entry, id: existing.id };
+  if (isBetterRecord(normalized, existing)) {
+    const updatedRecord = { ...normalized, id: existing.id };
     if (mode === 'postgres') {
       await pgPool.query(
         `UPDATE rankings
@@ -206,28 +235,31 @@ async function upsertBestRanking(entry) {
   return { saved: false, updated: false, isPersonalBest: false, record: existing };
 }
 
-async function getTopRankings(limit = 50) {
+async function getTopRankings(limit = 50, category = 'all') {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 1000));
+  const cat = category || 'all';
   if (mode === 'postgres') {
     const res = await pgPool.query(
       `SELECT * FROM rankings
+       WHERE category = $1
        ORDER BY score DESC, stage_reached DESC, accuracy DESC, no_hint_correct DESC, max_streak DESC, created_at ASC
-       LIMIT $1`,
-      [safeLimit]
+       LIMIT $2`,
+      [cat, safeLimit]
     );
     return res.rows.map((r, i) => ({ rank: i + 1, ...mapRow(r) }));
   }
 
   const stmt = sqliteDb.prepare(`
     SELECT * FROM rankings
+    WHERE category = ?
     ORDER BY score DESC, stage_reached DESC, accuracy DESC, no_hint_correct DESC, max_streak DESC, created_at ASC
     LIMIT ?
   `);
-  return stmt.all(safeLimit).map((r, i) => ({ rank: i + 1, ...mapRow(r) }));
+  return stmt.all(cat, safeLimit).map((r, i) => ({ rank: i + 1, ...mapRow(r) }));
 }
 
-async function getRankPositionByNickname(nickname) {
-  const all = await getTopRankings(500);
+async function getRankPositionByNickname(nickname, category = 'all') {
+  const all = await getTopRankings(500, category);
   const idx = all.findIndex((r) => r.nickname === nickname);
   return idx === -1 ? null : idx + 1;
 }
@@ -266,7 +298,7 @@ function getDbMode() {
 module.exports = {
   initDb,
   upsertBestRanking,
-  findByNickname,
+  findByNicknameAndCategory,
   getTopRankings,
   getRankPositionByNickname,
   deleteRanking,

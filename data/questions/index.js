@@ -11,20 +11,45 @@ const lifestyleRaw = require('./lifestyle');
 const sportsRaw = require('./sports');
 const techRaw = require('./tech');
 
+const movieGen = require('./generators/movie_gen');
+const philosophyLangGen = require('./generators/philosophy_lang_gen');
+const historyGeoGen = require('./generators/history_geo_gen');
+const scienceTechGen = require('./generators/science_tech_gen');
+const societyGen = require('./generators/society_gen');
+const artsLifeGen = require('./generators/arts_life_gen');
+
 const CATEGORIES = [
-  { id: 'history', name: '역사·세계사', shortName: '역사', en: 'HISTORY' },
-  { id: 'science', name: '과학·자연', shortName: '과학', en: 'SCIENCE' },
-  { id: 'humanities', name: '문학·인문·철학', shortName: '인문', en: 'HUMANITIES' },
-  { id: 'geography', name: '지리·세계문화', shortName: '지리', en: 'GEOGRAPHY' },
-  { id: 'arts', name: '예술·대중문화', shortName: '예술', en: 'ARTS' },
-  { id: 'society', name: '시사·경제·상식', shortName: '시사', en: 'SOCIETY' },
-  { id: 'language', name: '우리말·속담·한자', shortName: '우리말', en: 'LANGUAGE' },
-  { id: 'lifestyle', name: '음식·생활·건강', shortName: '생활', en: 'LIFESTYLE' },
-  { id: 'sports', name: '스포츠·레저', shortName: '스포츠', en: 'SPORTS' },
-  { id: 'tech', name: 'IT·기술·발명', shortName: '기술', en: 'TECH' }
+  { id: 'movie', name: '영화', en: 'MOVIE' },
+  { id: 'philosophy_lang', name: '철학·언어', en: 'PHILOSOPHY_LANG' },
+  { id: 'history_geo', name: '역사·지리', en: 'HISTORY_GEO' },
+  { id: 'science_tech', name: '과학·기술', en: 'SCIENCE_TECH' },
+  { id: 'society', name: '시사·사회', en: 'SOCIETY' },
+  { id: 'arts_life', name: '예술·생활', en: 'ARTS_LIFE' }
 ];
 
 const CATEGORY_MAP = new Map(CATEGORIES.map((c) => [c.id, c]));
+
+const LEGACY_CAT_MAP = {
+  humanities: 'philosophy_lang',
+  language: 'philosophy_lang',
+  history: 'history_geo',
+  geography: 'history_geo',
+  science: 'science_tech',
+  tech: 'science_tech',
+  society: 'society',
+  arts: 'arts_life',
+  lifestyle: 'arts_life',
+  sports: 'arts_life'
+};
+
+const MOVIE_RE = /영화|아카데미|황금종려|황금사자|황금곰|봉준호|기생충|올드보이|칸 국제|오스카|애니메이션|겨울왕국|팝콘|감독|할리우드|시네마/;
+
+function mapLegacyCategory(oldCatId, questionText) {
+  if (oldCatId === 'arts' && MOVIE_RE.test(questionText || '')) {
+    return 'movie';
+  }
+  return LEGACY_CAT_MAP[oldCatId] || 'society';
+}
 
 const DIFFICULTY_META = {
   intro: { id: 'intro', name: '입문', en: 'INTRO', basePoints: 80, timeSec: 35 },
@@ -33,7 +58,89 @@ const DIFFICULTY_META = {
   advanced: { id: 'advanced', name: '고급', en: 'CHIEF EDITOR', basePoints: 200, timeSec: 40 }
 };
 
-const RAW_BY_CATEGORY = {
+const DIFF_ALIAS = {
+  intro: 'intro',
+  n: 'intro',
+  beginner: 'beginner',
+  b: 'beginner',
+  intermediate: 'intermediate',
+  i: 'intermediate',
+  advanced: 'advanced',
+  a: 'advanced'
+};
+
+const ALL_QUESTIONS = [];
+const QUESTION_BY_ID = new Map();
+const SEEN_PROMPTS = new Set();
+
+function addQuestion({ id, catId, difficulty, question, answer, distractors, hint, explanation }) {
+  const cat = CATEGORY_MAP.get(catId);
+  const diff = DIFF_ALIAS[difficulty] || 'intermediate';
+  if (!cat || !question || !answer) return;
+
+  const qClean = String(question).trim();
+  const aClean = String(answer).trim();
+  const norm = qClean.replace(/\s+/g, '');
+  if (SEEN_PROMPTS.has(norm)) return;
+
+  const cleanDistractors = Array.from(
+    new Set((distractors || []).map((d) => String(d || '').trim()).filter((d) => d && d !== aClean))
+  );
+  if (cleanDistractors.length < 4) return;
+
+  SEEN_PROMPTS.add(norm);
+  const meta = DIFFICULTY_META[diff];
+  const qObj = {
+    id,
+    category: cat.id,
+    categoryName: cat.name,
+    categoryEn: cat.en,
+    difficulty: diff,
+    difficultyName: meta.name,
+    difficultyEn: meta.en,
+    basePoints: meta.basePoints,
+    timeSec: meta.timeSec,
+    question: qClean,
+    answer: aClean,
+    distractors: cleanDistractors,
+    hint: String(hint || '').trim(),
+    explanation: String(explanation || '').trim()
+  };
+  ALL_QUESTIONS.push(qObj);
+  QUESTION_BY_ID.set(id, qObj);
+}
+
+// 1. Load legacy curated intro & beginner sets mapped to 6 categories
+introEasyRaw.forEach((row, idx) => {
+  const [oldCat, question, answer, distractors, hint, explanation] = row;
+  addQuestion({
+    id: `cur-intro-${String(idx + 1).padStart(4, '0')}`,
+    catId: mapLegacyCategory(oldCat, question),
+    difficulty: 'intro',
+    question,
+    answer,
+    distractors,
+    hint,
+    explanation
+  });
+});
+
+beginnerEasyRaw.forEach((row, idx) => {
+  const [oldCat, question, answer, distractors, hint, explanation] = row;
+  addQuestion({
+    id: `cur-beg-${String(idx + 1).padStart(4, '0')}`,
+    catId: mapLegacyCategory(oldCat, question),
+    difficulty: 'beginner',
+    question,
+    answer,
+    distractors,
+    hint,
+    explanation
+  });
+});
+
+// 2. Load legacy 10 curated intermediate/advanced sets mapped to 6 categories
+const LEGACY_RAW = {
   history: historyRaw,
   science: scienceRaw,
   humanities: humanitiesRaw,
@@ -46,80 +153,13 @@ const RAW_BY_CATEGORY = {
   tech: techRaw
 };
 
-const ALL_QUESTIONS = [];
-const QUESTION_BY_ID = new Map();
-const SEEN_PROMPTS = new Set();
-
-function addQuestion({ id, cat, difficulty, question, answer, distractors, hint, explanation }) {
-  const norm = question.replace(/\s+/g, '');
-  if (SEEN_PROMPTS.has(norm)) return;
-  SEEN_PROMPTS.add(norm);
-
-  const qObj = {
-    id,
-    category: cat.id,
-    categoryName: cat.name,
-    categoryEn: cat.en,
-    difficulty,
-    difficultyName: DIFFICULTY_META[difficulty].name,
-    difficultyEn: DIFFICULTY_META[difficulty].en,
-    basePoints: DIFFICULTY_META[difficulty].basePoints,
-    timeSec: DIFFICULTY_META[difficulty].timeSec,
-    question,
-    answer,
-    distractors: Array.from(new Set(distractors.filter((d) => d && d !== answer))),
-    hint,
-    explanation
-  };
-  ALL_QUESTIONS.push(qObj);
-  QUESTION_BY_ID.set(id, qObj);
-}
-
-// 1. Load ultra-accessible introductory pool (200 questions, 20 per category)
-introEasyRaw.forEach((row, idx) => {
-  const [catId, question, answer, distractors, hint, explanation] = row;
-  const cat = CATEGORY_MAP.get(catId);
-  if (!cat) return;
-  addQuestion({
-    id: `intro-${catId}-${String(idx + 1).padStart(3, '0')}`,
-    cat,
-    difficulty: 'intro',
-    question,
-    answer,
-    distractors,
-    hint,
-    explanation
-  });
-});
-
-// 2. Load accessible everyday beginner pool (250 questions, 25 per category)
-beginnerEasyRaw.forEach((row, idx) => {
-  const [catId, question, answer, distractors, hint, explanation] = row;
-  const cat = CATEGORY_MAP.get(catId);
-  if (!cat) return;
-  addQuestion({
-    id: `easy-${catId}-${String(idx + 1).padStart(3, '0')}`,
-    cat,
-    difficulty: 'beginner',
-    question,
-    answer,
-    distractors,
-    hint,
-    explanation
-  });
-});
-
-// 2. Load the 10 curated category archives:
-//    Previous 'b' & 'i' rows become rich 'intermediate' (700 questions),
-//    and 'a' rows remain 'advanced' (350 questions).
-for (const cat of CATEGORIES) {
-  const rows = RAW_BY_CATEGORY[cat.id] || [];
+for (const [oldCat, rows] of Object.entries(LEGACY_RAW)) {
   rows.forEach((row, idx) => {
     const [diffCode, question, answer, distractors, hint, explanation] = row;
     const difficulty = diffCode === 'a' || diffCode === 'advanced' ? 'advanced' : 'intermediate';
     addQuestion({
-      id: `${cat.id}-${difficulty[0]}-${String(idx + 1).padStart(3, '0')}`,
-      cat,
+      id: `cur-${oldCat}-${String(idx + 1).padStart(4, '0')}`,
+      catId: mapLegacyCategory(oldCat, question),
       difficulty,
       question,
       answer,
@@ -128,6 +168,46 @@ for (const cat of CATEGORIES) {
       explanation
     });
   });
+}
+
+// 3. Load all 6 large-scale structured-fact generators (13,500+ additional unique verified questions)
+const GENERATORS = [
+  ['movie', movieGen],
+  ['philosophy_lang', philosophyLangGen],
+  ['history_geo', historyGeoGen],
+  ['science_tech', scienceTechGen],
+  ['society', societyGen],
+  ['arts_life', artsLifeGen]
+];
+
+for (const [catId, genFn] of GENERATORS) {
+  const generated = typeof genFn === 'function' ? genFn() : [];
+  generated.forEach((row, idx) => {
+    const [diffCode, question, answer, distractors, hint, explanation] = row;
+    addQuestion({
+      id: `gen-${catId}-${String(idx + 1).padStart(5, '0')}`,
+      catId,
+      difficulty: diffCode,
+      question,
+      answer,
+      distractors,
+      hint,
+      explanation
+    });
+  });
+}
+
+// Pre-index pools by (category, difficulty) for O(1) lookup across 15,000+ questions
+const POOLS = new Map();
+for (const q of ALL_QUESTIONS) {
+  const keys = [
+    `all::${q.difficulty}`,
+    `${q.category}::${q.difficulty}`
+  ];
+  for (const k of keys) {
+    if (!POOLS.has(k)) POOLS.set(k, []);
+    POOLS.get(k).push(q);
+  }
 }
 
 function shuffleArray(arr) {
@@ -162,47 +242,50 @@ function materializeQuestion(q) {
   };
 }
 
-function selectQuestions({ difficulty = 'progressive', category = 'all', count = 10, seenIds = [] }) {
+function selectQuestions({ difficulty = 'intro', category = 'all', count = 10, seenIds = [] }) {
   const seenSet = new Set(Array.isArray(seenIds) ? seenIds : []);
+  const safeCat = CATEGORY_MAP.has(category) ? category : 'all';
+  const pool = POOLS.get(`${safeCat}::${difficulty}`) || POOLS.get(`all::${difficulty}`) || [];
 
-  const pickFromPool = (pool, needed) => {
-    const unseen = shuffleArray(pool.filter((q) => !seenSet.has(q.id)));
-    const seen = shuffleArray(pool.filter((q) => seenSet.has(q.id)));
-    const ordered = [...unseen, ...seen];
-
-    if (category === 'all' && ordered.length > needed) {
-      const selected = [];
-      const usedIds = new Set();
-      let lastCat = null;
-      for (let i = 0; i < ordered.length && selected.length < needed; i++) {
-        const candidate = ordered.find((q) => !usedIds.has(q.id) && q.category !== lastCat)
-          || ordered.find((q) => !usedIds.has(q.id));
-        if (!candidate) break;
-        selected.push(candidate);
-        usedIds.add(candidate.id);
-        lastCat = candidate.category;
-      }
-      return selected;
-    }
-    return ordered.slice(0, needed);
-  };
-
-  const basePool = category === 'all'
-    ? ALL_QUESTIONS
-    : ALL_QUESTIONS.filter((q) => q.category === category);
-
-  if (difficulty === 'progressive') {
-    const bCount = Math.floor(count / 3);
-    const iCount = Math.floor(count / 3);
-    const aCount = count - bCount - iCount;
-    const bQs = pickFromPool(basePool.filter((q) => q.difficulty === 'beginner'), bCount);
-    const iQs = pickFromPool(basePool.filter((q) => q.difficulty === 'intermediate'), iCount);
-    const aQs = pickFromPool(basePool.filter((q) => q.difficulty === 'advanced'), aCount);
-    return [...bQs, ...iQs, ...aQs].map(materializeQuestion);
+  // Sample efficiently without sorting the entire 15,000 array unnecessarily
+  const unseen = [];
+  const seen = [];
+  for (const q of pool) {
+    if (seenSet.has(q.id)) seen.push(q);
+    else unseen.push(q);
   }
 
-  const filtered = basePool.filter((q) => q.difficulty === difficulty);
-  return pickFromPool(filtered, count).map(materializeQuestion);
+  const pickBalanced = (list, needed, usedIds, lastCatRef) => {
+    const shuffled = shuffleArray(list);
+    const out = [];
+    if (safeCat === 'all' && shuffled.length > needed) {
+      for (let i = 0; i < shuffled.length && out.length < needed; i++) {
+        const cand = shuffled.find((q) => !usedIds.has(q.id) && q.category !== lastCatRef.cat)
+          || shuffled.find((q) => !usedIds.has(q.id));
+        if (!cand) break;
+        out.push(cand);
+        usedIds.add(cand.id);
+        lastCatRef.cat = cand.category;
+      }
+      return out;
+    }
+    for (const q of shuffled) {
+      if (out.length >= needed) break;
+      if (!usedIds.has(q.id)) {
+        out.push(q);
+        usedIds.add(q.id);
+      }
+    }
+    return out;
+  };
+
+  const usedIds = new Set();
+  const lastCatRef = { cat: null };
+  const picked = pickBalanced(unseen, count, usedIds, lastCatRef);
+  if (picked.length < count) {
+    picked.push(...pickBalanced(seen, count - picked.length, usedIds, lastCatRef));
+  }
+  return picked.map(materializeQuestion);
 }
 
 function getStats() {
